@@ -124,3 +124,66 @@ def _detect(probe: RepoProbe) -> str | None:
         return "parakeet"
 
     return None
+
+
+# Catalog slug -> family. The curated registry keys are exactly the
+# upstream variant slugs, so they double as the --variant pool for
+# converters that validate the variant (whisper, moonshine, voxtral,
+# parakeet, canary).
+def _slug_family(slug: str) -> str | None:
+    if slug.startswith("canary-qwen"):
+        return "canary_qwen"
+    if slug.startswith("canary"):
+        return "canary"
+    if slug.startswith("cohere"):
+        return "cohere"
+    if slug.startswith("fun-asr"):
+        return "funasr_nano"
+    if slug.startswith("gigaam"):
+        return "gigaam"
+    if slug.startswith("granite"):
+        return "granite_nar" if slug.endswith("-nar") else "granite"
+    if slug == "medasr":
+        return "medasr"
+    if slug.startswith("moonshine-streaming"):
+        return "moonshine_streaming"
+    if slug.startswith("moonshine"):
+        return "moonshine"
+    if slug.startswith(("parakeet", "nemotron")):
+        return "parakeet"
+    if slug.startswith("qwen3-asr"):
+        return "qwen3_asr"
+    if slug.startswith("sensevoice"):
+        return "sensevoice"
+    if slug.startswith("voxtral"):
+        return "voxtral_realtime" if "realtime" in slug else "voxtral"
+    if slug.startswith("whisper") or slug == "breeze-asr-25":
+        return "whisper"
+    return None
+
+
+def variant_slugs(family: str) -> list[str]:
+    from .models import REGISTRY
+
+    return sorted(s for s in REGISTRY if _slug_family(s) == family)
+
+
+def derive_variant(family: str, probe: RepoProbe) -> str | None:
+    """Base-variant slug for a fine-tune, or None when underivable.
+
+    Preference: the repo's ``base_model:*`` hub tag, then the longest
+    catalog slug embedded in the repo name. None simply omits --variant;
+    validating converters will then reject truly unidentifiable repos
+    with their own message.
+    """
+    pool = variant_slugs(family)
+    for tag in probe.tags:
+        if tag.startswith("base_model:"):
+            name = tag.rsplit("/", 1)[-1].lower()
+            if name in pool:
+                return name
+    hay = probe.repo.rsplit("/", 1)[-1].lower().replace("_", "-")
+    matches = [s for s in pool if s in hay]
+    if matches:
+        return max(matches, key=len)
+    return None

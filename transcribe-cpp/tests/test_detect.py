@@ -10,7 +10,9 @@ from wyoming_transcribe_cpp.detect import (
     CONVERT_SCRIPTS,
     FAMILIES,
     RepoProbe,
+    derive_variant,
     detect_family,
+    variant_slugs,
 )
 
 FIXTURES = Path(__file__).parent / "fixtures" / "detect"
@@ -99,3 +101,44 @@ class TestDetectFamily:
     def test_empty_probe_raises(self):
         with pytest.raises(ConversionUnsupported):
             detect_family(RepoProbe(repo="someone/empty"))
+
+
+class TestVariantSlugs:
+    def test_whisper_pool_holds_official_and_breeze(self):
+        slugs = variant_slugs("whisper")
+        assert "whisper-tiny" in slugs
+        assert "whisper-large-v3-turbo" in slugs
+        assert "breeze-asr-25" in slugs
+        assert not any(s.startswith("moonshine") for s in slugs)
+
+    def test_canary_pool_excludes_canary_qwen(self):
+        assert "canary-1b-flash" in variant_slugs("canary")
+        assert not any("qwen" in s for s in variant_slugs("canary"))
+        assert "canary-qwen-2.5b" in variant_slugs("canary_qwen")
+
+    def test_every_registry_slug_lands_in_exactly_one_family(self):
+        from wyoming_transcribe_cpp.models import REGISTRY
+
+        seen = []
+        for fam in FAMILIES:
+            seen += variant_slugs(fam)
+        assert sorted(seen) == sorted(REGISTRY)
+
+
+class TestDeriveVariant:
+    def test_base_model_tag_wins(self):
+        probe = RepoProbe(
+            repo="KBLab/kb-whisper-tiny",
+            model_type="whisper",
+            tags=["base_model:openai/whisper-tiny",
+                  "base_model:quantized:openai/whisper-tiny"],
+        )
+        assert derive_variant("whisper", probe) == "whisper-tiny"
+
+    def test_repo_name_substring_fallback_prefers_longest(self):
+        probe = RepoProbe(repo="someone/whisper-large-v3-turbo-sv-ft")
+        assert derive_variant("whisper", probe) == "whisper-large-v3-turbo"
+
+    def test_unrelated_name_yields_none(self):
+        probe = RepoProbe(repo="someone/my-swedish-stt")
+        assert derive_variant("whisper", probe) is None
