@@ -44,6 +44,17 @@ jobs:
           dockerfile: transcribe-cpp/Dockerfile
           failure-threshold: warning
 
+  lint-apparmor:
+    name: AppArmor profile parse
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: apparmor_parser -Q
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -yqq apparmor
+          sudo apparmor_parser -Q transcribe-cpp/apparmor.txt
+
   lint-shell:
     name: shellcheck
     runs-on: ubuntu-latest
