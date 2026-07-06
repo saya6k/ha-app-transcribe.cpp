@@ -6,8 +6,8 @@
 # ==============================================================================
 
 # GGUF model downloads to the persistent /data volume (not the image).
+# Directory creation/ownership is handled by the init-perms oneshot.
 export HOME=/data
-mkdir -p /data/models
 
 flags=()
 bashio::config.has_value 'model'         && flags+=('--model'         "$(bashio::config 'model')")
@@ -20,6 +20,8 @@ bashio::config.true 'speech_enhancement' && flags+=('--speech-enhancement')
 bashio::config.true 'diarization'        && flags+=('--diarization')
 
 # Quote the array so flag values containing spaces stay one argument each.
-exec python3 -m wyoming_transcribe_cpp \
+# The server runs unprivileged; conversion happens in the converter-user
+# worker, reached only through /run/transcribe-cpp/convert.sock.
+exec s6-setuidgid transcribe python3 -m wyoming_transcribe_cpp \
     --uri 'tcp://0.0.0.0:10380' \
     "${flags[@]}"
