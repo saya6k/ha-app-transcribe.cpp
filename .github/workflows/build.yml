@@ -1,0 +1,164 @@
+---
+name: Build
+
+# yamllint disable-line rule:truthy
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to build (e.g. 4.1.20)
+        required: true
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/app-transcribe-cpp
+
+jobs:
+  init:
+    name: Initialize build
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Resolve version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            ver="${{ inputs.version }}"
+          else
+            ver="${{ github.event.release.tag_name }}"
+          fi
+          echo "version=${ver#v}" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build ${{ matrix.arch }}
+    needs: init
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            os: ubuntu-latest
+          - arch: aarch64
+            os: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build and push per-arch image
+        uses: home-assistant/builder/actions/build-image@2026.06.0
+        with:
+          arch: ${{ matrix.arch }}
+          image: ${{ env.IMAGE }}
+          context: transcribe-cpp
+          image-tags: |
+            ${{ matrix.arch }}-${{ needs.init.outputs.version }}
+            ${{ matrix.arch }}-latest
+          cache-image-tag: ${{ matrix.arch }}-latest
+          version: ${{ needs.init.outputs.version }}
+          push: "true"
+          container-registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+  manifest:
+    name: Publish multi-arch manifest
+    needs: [init, build]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      packages: write
+    env:
+      VERSION: ${{ needs.init.outputs.version }}
+    steps:
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Create and sign multi-arch manifest
+        # :latest moves on every publish (stable or rc) -- it means "the
+        # newest thing available", same as Docker's usual convention, so
+        # anyone tracking it for testing never goes stale once a stable
+        # release supersedes the last rc. :stable moves only on non-rc
+        # publishes, for anyone who wants to guarantee they never land on an
+        # untested build. ha-apps' config.yaml pins an exact version
+        # regardless, so it never touches either floating tag.
+        env:
+          IS_PRERELEASE: ${{ github.event.release.prerelease }}
+        run: |
+          set -euo pipefail
+          metadata="$(mktemp)"
+          tags=(--tag "${{ env.IMAGE }}:${VERSION}" --tag "${{ env.IMAGE }}:latest")
+          if [ "${IS_PRERELEASE}" != "true" ]; then
+            tags+=(--tag "${{ env.IMAGE }}:stable")
+          fi
+          docker buildx imagetools create \
+            --metadata-file "${metadata}" \
+            "${tags[@]}" \
+            "${{ env.IMAGE }}:amd64-${VERSION}" \
+            "${{ env.IMAGE }}:aarch64-${VERSION}"
+
+          digest="$(jq -r '.["containerimage.descriptor"].digest' "${metadata}")"
+          cosign sign --yes "${{ env.IMAGE }}@${digest}"
+
+  notify:
+    name: Notify ha-apps catalog
+    needs: [init, manifest]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release' && github.event.release.prerelease == false
+    steps:
+      - name: Dispatch to ha-apps
+        env:
+          GH_TOKEN: ${{ secrets.CATALOG_PAT }}
+          VERSION: ${{ needs.init.outputs.version }}
+          RELEASE_NOTES: ${{ github.event.release.body }}
+        run: |
+          set -euo pipefail
+          SLUG="${GITHUB_REPOSITORY#saya6k/ha-app-}"
+          jq -n \
+            --arg app "$SLUG" \
+            --arg version "$VERSION" \
+            --arg notes "$RELEASE_NOTES" \
+            '{event_type:"app-released",client_payload:{app:$app,version:$version,release_notes:$notes}}' \
+          | gh api repos/saya6k/ha-apps/dispatches --input -
+
+  notify-beta:
+    name: Notify ha-apps catalog (beta)
+    # Same needs as `notify` -- must wait for the full multi-arch (amd64 +
+    # aarch64) manifest to be built and signed, not just a single-arch build,
+    # before ha-apps' beta branch is told a version exists.
+    needs: [init, manifest]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release' && github.event.release.prerelease == true
+    steps:
+      - name: Dispatch to ha-apps (beta)
+        env:
+          GH_TOKEN: ${{ secrets.CATALOG_PAT }}
+          VERSION: ${{ needs.init.outputs.version }}
+          RELEASE_NOTES: ${{ github.event.release.body }}
+        run: |
+          set -euo pipefail
+          SLUG="${GITHUB_REPOSITORY#saya6k/ha-app-}"
+          jq -n \
+            --arg app "$SLUG" \
+            --arg version "$VERSION" \
+            --arg notes "$RELEASE_NOTES" \
+            '{event_type:"app-released-beta",client_payload:{app:$app,version:$version,release_notes:$notes}}' \
+          | gh api repos/saya6k/ha-apps/dispatches --input -

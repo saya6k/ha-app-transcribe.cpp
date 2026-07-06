@@ -24,6 +24,9 @@ import yaml
 APP_DIR = Path(__file__).parent.parent
 REGISTRY_JSON = APP_DIR / "wyoming_transcribe_cpp" / "registry.json"
 CONFIG_YAML = APP_DIR / "config.yaml"
+DOCS_MD = APP_DIR / "DOCS.md"
+DOCS_BEGIN = "<!-- registry-table:begin -->"
+DOCS_END = "<!-- registry-table:end -->"
 
 EXCLUDED_LICENSES = {"cc-by-nc-4.0"}  # non-commercial — SPEC "never"
 
@@ -65,6 +68,21 @@ def main() -> None:
         raise SystemExit("config.yaml: expected exactly one 'model: list(...)' line")
     CONFIG_YAML.write_text(config)
     print("config.yaml model list updated")
+
+    rows = ["| Model | License | Streaming | Languages |", "|---|---|---|---|"]
+    for name, e in sorted(registry.items()):
+        langs = len(e["languages"])
+        rows.append(
+            f"| [`{name}`](https://huggingface.co/{e['repo']}) "
+            f"| {e['license']} | {'yes' if e['streaming'] else '—'} | {langs} |"
+        )
+    docs = DOCS_MD.read_text()
+    begin, end = docs.index(DOCS_BEGIN), docs.index(DOCS_END)
+    docs = (
+        docs[: begin + len(DOCS_BEGIN)] + "\n" + "\n".join(rows) + "\n" + docs[end:]
+    )
+    DOCS_MD.write_text(docs)
+    print("DOCS.md model table updated")
 
 
 if __name__ == "__main__":

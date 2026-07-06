@@ -1,0 +1,46 @@
+---
+name: Release Drafter
+
+# yamllint disable-line rule:truthy
+on:
+  push:
+    branches: [main]
+  # Label PRs from their Conventional-Commit title so the version-resolver can
+  # pick the bump (feat -> minor; fix/chore/ci -> patch). Without a PR trigger
+  # the autolabeler never runs, so every release defaulted to patch. Uses
+  # pull_request_target so labeling works for fork PRs too; release-drafter only
+  # calls the API (no PR code is checked out).
+  pull_request_target:
+    types: [opened, reopened, synchronize, edited]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  # Labels are mutated through the Issues API even for PRs -- without this,
+  # autolabeler's label-add calls 403 silently (no error surfaced in the
+  # release-drafter log), so every PR ships unlabeled and every category
+  # falls through to the flat "What's Changed" list instead of being
+  # grouped. Confirmed missing on a live repo 2026-07-04.
+  issues: write
+
+jobs:
+  draft:
+    name: Draft release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: release-drafter/release-drafter@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  draft-prerelease:
+    name: Draft prerelease (rc)
+    # PR events are only for autolabeling, which the stable job already does.
+    if: github.event_name != 'pull_request_target'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: release-drafter/release-drafter@v6
+        with:
+          config-name: release-drafter-prerelease.yml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
