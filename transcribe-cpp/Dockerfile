@@ -61,13 +61,18 @@ RUN cmake -B build -G Ninja \
         /usr/local/bin/transcribe-quantize \
     && strip --strip-unneeded /usr/local/bin/transcribe-quantize
 
-# Upstream conversion scripts (torch runs from a lazy /data venv at runtime,
-# never from the image) — needed by the custom_model pipeline. Only the
-# converters + their shared lib/ (~0.7 MB); the rest of scripts/ (uv lockfiles,
-# CI, WER tooling — ~6 MB) is dev-only upstream.
+# Upstream conversion scripts (torch runs from lazy /data venvs at runtime,
+# never from the image) — needed by the custom_model pipeline. Converters +
+# their shared lib/ (~0.7 MB) + the per-family envs/*/pyproject.toml dep
+# manifests convert.py parses; the rest of scripts/ (uv lockfiles, CI, WER
+# tooling — ~6 MB) is dev-only upstream.
 RUN mkdir -p /usr/local/share/transcribe-cpp/scripts \
     && cp scripts/convert-*.py /usr/local/share/transcribe-cpp/scripts/ \
-    && cp -r scripts/lib /usr/local/share/transcribe-cpp/scripts/lib
+    && cp -r scripts/lib /usr/local/share/transcribe-cpp/scripts/lib \
+    && for env in scripts/envs/*/; do \
+        install -D -m 0644 "${env}pyproject.toml" \
+            "/usr/local/share/transcribe-cpp/envs/$(basename "${env}")/pyproject.toml"; \
+    done
 
 RUN pip3 install --no-cache-dir --no-compile "wyoming>=1.9,<2" "huggingface_hub" "numpy" "sherpa-onnx" \
     && pip3 install --no-cache-dir --no-compile --no-deps /src/bindings/python
@@ -79,12 +84,15 @@ RUN pip3 install --no-cache-dir --no-compile --no-deps /usr/src/app
 FROM ${BUILD_FROM}
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+ARG TRANSCRIBE_REF
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     HF_HUB_DISABLE_TELEMETRY=1 \
-    TRANSCRIBE_LIBRARY=/usr/local/lib/libtranscribe.so
+    TRANSCRIBE_LIBRARY=/usr/local/lib/libtranscribe.so \
+    TRANSCRIBE_REF=${TRANSCRIBE_REF}
 
-# libopenblas0: host decoder BLAS. libstdc++6: C++ runtime for libtranscribe/ggml.
+# libopenblas0: host decoder BLAS. libstdc++6: C++ runtime for libtranscribe/
+# ggml. git: pip install of git+https converter deps (NeMo, GigaAM).
 RUN \
     apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -93,6 +101,7 @@ RUN \
         libopenblas0 \
         libstdc++6 \
         ca-certificates \
+        git \
         netcat-traditional \
     && rm -rf /var/lib/apt/lists/*
 
@@ -102,11 +111,18 @@ COPY --from=builder /usr/local /usr/local
 
 COPY rootfs /
 
+# Privilege split: transcribe = Wyoming server, converter = conversion
+# worker. Shared primary group so the worker's unix socket (0660) accepts
+# the server; write separation stays owner-only on the /data subtrees.
 RUN ldconfig \
+    && groupadd -r transcribe \
+    && useradd -r -g transcribe -d /data -s /usr/sbin/nologin transcribe \
+    && useradd -r -g transcribe -d /data/convert-venv -s /usr/sbin/nologin converter \
     && chmod +x \
         /etc/s6-overlay/s6-rc.d/transcribe-cpp/run \
         /etc/s6-overlay/s6-rc.d/transcribe-cpp/finish \
-        /etc/s6-overlay/s6-rc.d/discovery/run
+        /etc/s6-overlay/s6-rc.d/discovery/run \
+        /etc/s6-overlay/s6-rc.d/init-perms/run
 
 HEALTHCHECK --start-period=10m \
     CMD echo '{ "type": "describe" }' \

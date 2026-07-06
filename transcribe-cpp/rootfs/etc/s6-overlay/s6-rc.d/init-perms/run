@@ -1,0 +1,22 @@
+#!/command/with-contenv bashio
+# vim: ft=bash
+# shellcheck shell=bash
+# ==============================================================================
+# Prepare /data and /run ownership for the privilege-separated services:
+#   transcribe — Wyoming server (curated models, HF cache)
+#   converter  — conversion worker (per-family venvs, custom GGUFs)
+# chown -R is metadata-only, cheap even over cached multi-GB models.
+# ==============================================================================
+
+mkdir -p \
+    /data/models/custom \
+    /data/convert-venv \
+    /data/.cache/huggingface \
+    /run/transcribe-cpp
+
+chown -R transcribe:transcribe /data/models /data/.cache/huggingface
+chown -R converter:transcribe /data/models/custom /data/convert-venv
+chown converter:transcribe /run/transcribe-cpp
+chmod 0750 /run/transcribe-cpp
+
+bashio::log.info "Ownership prepared for the transcribe/converter split."
