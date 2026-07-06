@@ -21,12 +21,12 @@ profile hassio_transcribe_cpp flags=(attach_disconnected,mediate_deleted) {
   signal (send,receive) set=(kill,term,int,hup,cont,usr1,usr2),
 
   # S6-Overlay (official HA example pattern)
-  /init ix,
-  /bin/** ix,
-  /usr/bin/** ix,
-  /run/{s6,s6-rc*,service}/** ix,
-  /package/** ix,
-  /command/** ix,
+  /init rix,
+  /bin/** rix,
+  /usr/bin/** rix,
+  /run/{s6,s6-rc*,service}/** rix,
+  /package/** rmix,
+  /command/** rmix,
   /etc/services.d/** rwix,
   /etc/cont-init.d/** rwix,
   /etc/cont-finish.d/** rwix,
@@ -34,9 +34,11 @@ profile hassio_transcribe_cpp flags=(attach_disconnected,mediate_deleted) {
   /run/ rwk,
   /run/** rwk,
   /dev/tty rw,
+  /dev/console rw,
+  /dev/pts/** rw,
 
   # Bashio (discovery + service run scripts)
-  /usr/lib/bashio/** ix,
+  /usr/lib/bashio/** rix,
   /tmp/ rwk,
   /tmp/** rwk,
 
@@ -47,7 +49,7 @@ profile hassio_transcribe_cpp flags=(attach_disconnected,mediate_deleted) {
   # Python runtime + our package/deps + libtranscribe/ggml/quantize tool
   /usr/lib/python3*/** r,
   /usr/lib/python3*/lib-dynload/** mr,
-  /usr/local/bin/* ix,
+  /usr/local/bin/* rix,
   /usr/local/lib/** mr,
   /usr/local/share/transcribe-cpp/** r,
   /usr/share/** r,
