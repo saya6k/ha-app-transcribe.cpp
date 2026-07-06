@@ -1,0 +1,39 @@
+{
+ "family": "medasr",
+ "repo": "google/medasr",
+ "model_type": "lasr_ctc",
+ "architectures": [],
+ "tags": [
+  "transformers",
+  "safetensors",
+  "lasr_ctc",
+  "medical-asr",
+  "radiology",
+  "medical",
+  "automatic-speech-recognition",
+  "en",
+  "arxiv:2605.16555",
+  "arxiv:2005.08100",
+  "arxiv:2304.13134",
+  "arxiv:2309.08105",
+  "license:other",
+  "endpoints_compatible",
+  "region:us"
+ ],
+ "files": [
+  ".gitattributes",
+  "README.md",
+  "added_tokens.json",
+  "config.json",
+  "lm_6.arpa.xz",
+  "lm_6.kenlm",
+  "model.safetensors",
+  "notebook.ipynb",
+  "preprocessor_config.json",
+  "processor_config.json",
+  "spiece.model",
+  "test_audio.wav",
+  "tokenizer.json",
+  "tokenizer_config.json"
+ ]
+}

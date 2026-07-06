@@ -1,0 +1,25 @@
+{
+ "family": "gigaam",
+ "repo": "ai-sage/GigaAM-v3",
+ "model_type": "gigaam",
+ "architectures": [],
+ "tags": [
+  "pytorch",
+  "gigaam",
+  "automatic-speech-recognition",
+  "custom_code",
+  "ru",
+  "en",
+  "arxiv:2506.01192",
+  "license:mit",
+  "region:us"
+ ],
+ "files": [
+  ".gitattributes",
+  "README.md",
+  "config.json",
+  "modeling_gigaam.py",
+  "pytorch_model.bin",
+  "tokenizer.model"
+ ]
+}

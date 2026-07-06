@@ -1,0 +1,30 @@
+{
+ "family": "qwen3_asr",
+ "repo": "Qwen/Qwen3-ASR-0.6B",
+ "model_type": "qwen3_asr",
+ "architectures": [
+  "Qwen3ASRForConditionalGeneration"
+ ],
+ "tags": [
+  "safetensors",
+  "qwen3_asr",
+  "automatic-speech-recognition",
+  "arxiv:2601.21337",
+  "license:apache-2.0",
+  "eval-results",
+  "deploy:azure",
+  "region:us"
+ ],
+ "files": [
+  ".gitattributes",
+  "README.md",
+  "chat_template.json",
+  "config.json",
+  "generation_config.json",
+  "merges.txt",
+  "model.safetensors",
+  "preprocessor_config.json",
+  "tokenizer_config.json",
+  "vocab.json"
+ ]
+}

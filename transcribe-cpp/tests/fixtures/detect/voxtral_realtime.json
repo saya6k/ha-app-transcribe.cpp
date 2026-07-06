@@ -1,0 +1,45 @@
+{
+ "family": "voxtral_realtime",
+ "repo": "mistralai/Voxtral-Mini-4B-Realtime-2602",
+ "model_type": "voxtral_realtime",
+ "architectures": [
+  "VoxtralRealtimeForConditionalGeneration"
+ ],
+ "tags": [
+  "vllm",
+  "safetensors",
+  "voxtral_realtime",
+  "mistral-common",
+  "automatic-speech-recognition",
+  "en",
+  "fr",
+  "es",
+  "de",
+  "ru",
+  "zh",
+  "ja",
+  "it",
+  "pt",
+  "nl",
+  "ar",
+  "hi",
+  "ko",
+  "arxiv:2602.11298",
+  "base_model:mistralai/Ministral-3-3B-Base-2512",
+  "base_model:finetune:mistralai/Ministral-3-3B-Base-2512",
+  "license:apache-2.0",
+  "eval-results",
+  "region:us"
+ ],
+ "files": [
+  ".gitattributes",
+  "README.md",
+  "config.json",
+  "consolidated.safetensors",
+  "generation_config.json",
+  "model.safetensors",
+  "params.json",
+  "processor_config.json",
+  "tekken.json"
+ ]
+}

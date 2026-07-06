@@ -1,0 +1,39 @@
+{
+ "family": "voxtral",
+ "repo": "mistralai/Voxtral-Mini-3B-2507",
+ "model_type": "voxtral",
+ "architectures": [
+  "VoxtralForConditionalGeneration"
+ ],
+ "tags": [
+  "mistral-common",
+  "safetensors",
+  "voxtral",
+  "vllm",
+  "en",
+  "fr",
+  "de",
+  "es",
+  "it",
+  "pt",
+  "nl",
+  "hi",
+  "arxiv:2507.13264",
+  "license:apache-2.0",
+  "eval-results",
+  "region:us"
+ ],
+ "files": [
+  ".gitattributes",
+  "README.md",
+  "config.json",
+  "consolidated.safetensors",
+  "generation_config.json",
+  "model-00001-of-00002.safetensors",
+  "model-00002-of-00002.safetensors",
+  "model.safetensors.index.json",
+  "params.json",
+  "preprocessor_config.json",
+  "tekken.json"
+ ]
+}

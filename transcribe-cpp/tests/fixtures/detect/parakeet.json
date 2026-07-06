@@ -1,0 +1,38 @@
+{
+ "family": "parakeet",
+ "repo": "nvidia/parakeet-tdt-0.6b-v2",
+ "model_type": "",
+ "architectures": [],
+ "tags": [
+  "nemo",
+  "automatic-speech-recognition",
+  "speech",
+  "audio",
+  "Transducer",
+  "TDT",
+  "FastConformer",
+  "Conformer",
+  "pytorch",
+  "NeMo",
+  "hf-asr-leaderboard",
+  "en",
+  "dataset:nvidia/Granary",
+  "dataset:nvidia/nemo-asr-set-3.0",
+  "arxiv:2305.05084",
+  "arxiv:2304.06795",
+  "arxiv:2406.00899",
+  "arxiv:2410.01036",
+  "arxiv:2505.13404",
+  "license:cc-by-4.0",
+  "model-index",
+  "eval-results",
+  "deploy:azure",
+  "region:us"
+ ],
+ "files": [
+  ".eval_results/open_asr_leaderboard.yaml",
+  ".gitattributes",
+  "README.md",
+  "parakeet-tdt-0.6b-v2.nemo"
+ ]
+}

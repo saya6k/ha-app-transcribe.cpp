@@ -1,0 +1,29 @@
+{
+ "family": "moonshine_streaming",
+ "repo": "UsefulSensors/moonshine-streaming-tiny",
+ "model_type": "moonshine_streaming",
+ "architectures": [],
+ "tags": [
+  "transformers",
+  "safetensors",
+  "moonshine_streaming",
+  "automatic-speech-recognition",
+  "en",
+  "license:mit",
+  "eval-results",
+  "endpoints_compatible",
+  "region:us"
+ ],
+ "files": [
+  ".gitattributes",
+  "README.md",
+  "config.json",
+  "generation_config.json",
+  "model.safetensors",
+  "preprocessor_config.json",
+  "processor_config.json",
+  "special_tokens_map.json",
+  "tokenizer.json",
+  "tokenizer_config.json"
+ ]
+}

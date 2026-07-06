@@ -1,0 +1,31 @@
+{
+ "family": "moonshine",
+ "repo": "UsefulSensors/moonshine-tiny",
+ "model_type": "moonshine",
+ "architectures": [
+  "MoonshineForConditionalGeneration"
+ ],
+ "tags": [
+  "transformers",
+  "safetensors",
+  "moonshine",
+  "automatic-speech-recognition",
+  "en",
+  "arxiv:2410.15608",
+  "arxiv:1810.03993",
+  "license:mit",
+  "eval-results",
+  "endpoints_compatible",
+  "deploy:azure",
+  "region:us"
+ ],
+ "files": [
+  ".gitattributes",
+  "README.md",
+  "config.json",
+  "generation_config.json",
+  "model.safetensors",
+  "preprocessor_config.json",
+  "tokenizer.json"
+ ]
+}

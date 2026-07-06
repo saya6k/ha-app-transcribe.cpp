@@ -1,0 +1,50 @@
+{
+ "family": "granite",
+ "repo": "ibm-granite/granite-4.0-1b-speech",
+ "model_type": "granite_speech",
+ "architectures": [
+  "GraniteSpeechForConditionalGeneration"
+ ],
+ "tags": [
+  "transformers",
+  "safetensors",
+  "granite_speech",
+  "automatic-speech-recognition",
+  "multilingual",
+  "en",
+  "fr",
+  "de",
+  "es",
+  "pt",
+  "ja",
+  "arxiv:2505.08699",
+  "arxiv:2603.11243",
+  "base_model:ibm-granite/granite-4.0-1b-base",
+  "base_model:finetune:ibm-granite/granite-4.0-1b-base",
+  "license:apache-2.0",
+  "eval-results",
+  "endpoints_compatible",
+  "deploy:azure",
+  "region:us"
+ ],
+ "files": [
+  ".eval_results/open_asr_leaderboard.yaml",
+  ".gitattributes",
+  "README.md",
+  "added_tokens.json",
+  "chat_template.jinja",
+  "config.json",
+  "merges.txt",
+  "model-00001-of-00003.safetensors",
+  "model-00002-of-00003.safetensors",
+  "model-00003-of-00003.safetensors",
+  "model.safetensors.index.json",
+  "multilingual_sample.wav",
+  "preprocessor_config.json",
+  "processor_config.json",
+  "special_tokens_map.json",
+  "tokenizer.json",
+  "tokenizer_config.json",
+  "vocab.json"
+ ]
+}
