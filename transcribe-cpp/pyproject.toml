@@ -25,3 +25,6 @@ wyoming-transcribe-cpp = "wyoming_transcribe_cpp.__main__:run"
 
 [tool.setuptools]
 packages = ["wyoming_transcribe_cpp"]
+
+[tool.setuptools.package-data]
+wyoming_transcribe_cpp = ["registry.json"]
