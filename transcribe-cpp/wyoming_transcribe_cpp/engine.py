@@ -49,6 +49,11 @@ class TranscribeEngine:
         result = self._session.run(pcm, language=self._normalize_language(language))
         return result.text.strip()
 
+    def create_stream(self, language: str | None) -> "TranscribeStream":
+        """Begin a streaming decode (requires ``supports_streaming``)."""
+        stream = self._session.stream(language=self._normalize_language(language))
+        return TranscribeStream(stream)
+
     def warmup(self) -> None:
         """Fault weights in from disk with a short silent decode."""
         import numpy as np
@@ -70,3 +75,24 @@ class TranscribeEngine:
     def close(self) -> None:
         self._session.close()
         self._model.close()
+
+
+class TranscribeStream:
+    """One in-flight streaming decode (a session runs at most one)."""
+
+    def __init__(self, stream) -> None:
+        self._stream = stream
+
+    def feed(self, pcm: "np.ndarray") -> str:
+        """Feed samples; return the current hypothesis (committed+tentative)."""
+        self._stream.feed(pcm)
+        return self._stream.text().display
+
+    def finalize(self) -> str:
+        """Flush the decoder and return the final text."""
+        self._stream.finalize()
+        return self._stream.text().display.strip()
+
+    def close(self) -> None:
+        """Reset the stream so the session can start the next one."""
+        self._stream.reset()
