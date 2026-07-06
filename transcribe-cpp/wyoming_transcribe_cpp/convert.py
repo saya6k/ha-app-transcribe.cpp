@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -65,6 +66,32 @@ def _venv_python(family: str) -> Path:
     return venv_dir(family) / "bin" / "python3"
 
 
+_GIT_DEP = re.compile(
+    r"git\+https://github\.com/(?P<org>[^/]+)/(?P<repo>[^/@]+?)"
+    r"(?:\.git)?@(?P<ref>[A-Za-z0-9._-]+)$"
+)
+
+
+def _degit(dep: str) -> str:
+    """Rewrite a github git+ spec to the equivalent commit tarball.
+
+    The image ships no git; pip installs pinned github sources from
+    /archive/<ref>.tar.gz instead — identical content, no VCS needed.
+    """
+    if "git+" not in dep:
+        return dep
+    m = _GIT_DEP.search(dep)
+    if m is None:
+        raise ConversionUnsupported(
+            f"cannot install VCS dependency without git in the image: {dep!r}"
+        )
+    head = dep.split("@", 1)[0].strip()
+    return (
+        f"{head} @ https://github.com/{m['org']}/{m['repo']}"
+        f"/archive/{m['ref']}.tar.gz"
+    )
+
+
 def pip_commands(python: str | Path, deps: list[str]) -> list[list[str]]:
     """torch first from the CPU-only index, then the family deps from PyPI.
 
@@ -72,6 +99,7 @@ def pip_commands(python: str | Path, deps: list[str]) -> list[list[str]]:
     from the CPU index keeps pip from ever resolving the CUDA-bundled
     PyPI linux wheels; the later resolve sees torch already satisfied.
     """
+    deps = [_degit(d) for d in deps]
     torch_pkgs = ["torch"]
     if any(d.split()[0].startswith("torchaudio") for d in deps):
         torch_pkgs.append("torchaudio")

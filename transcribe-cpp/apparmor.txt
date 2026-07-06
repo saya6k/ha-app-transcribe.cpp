@@ -47,7 +47,6 @@ profile hassio_transcribe_cpp flags=(attach_disconnected,mediate_deleted) {
   # Python runtime + our package/deps + libtranscribe/ggml/quantize tool
   /usr/lib/python3*/** r,
   /usr/lib/python3*/lib-dynload/** mr,
-  /usr/lib/git-core/** ix,
   /usr/local/bin/* ix,
   /usr/local/lib/** mr,
   /usr/local/share/transcribe-cpp/** r,

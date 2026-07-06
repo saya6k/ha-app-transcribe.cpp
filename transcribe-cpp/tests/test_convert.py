@@ -75,6 +75,28 @@ class TestPipCommands:
             for cmd in pip_commands("/v/bin/python3", fixture_deps(family)):
                 assert not any("cu1" in c or "cuda" in c for c in cmd)
 
+    def test_github_git_deps_become_tarball_urls(self):
+        # git is not in the image; github git+ specs install from the
+        # equivalent commit tarball instead.
+        main = pip_commands("/v/bin/python3", fixture_deps("parakeet"))[1]
+        nemo = next(c for c in main if c.startswith("nemo-toolkit"))
+        assert "git+" not in nemo
+        assert nemo == (
+            "nemo-toolkit[asr] @ "
+            "https://github.com/NVIDIA-NeMo/NeMo/archive/6967f48fda2a.tar.gz"
+        )
+        giga = pip_commands("/v/bin/python3", fixture_deps("gigaam"))[1]
+        assert not any("git+" in c for c in giga)
+        assert any(
+            c.startswith("gigaam[torch] @ https://github.com/salute-developers/"
+                         "GigaAM/archive/")
+            for c in giga
+        )
+
+    def test_non_github_git_dep_is_rejected(self):
+        with pytest.raises(ConversionUnsupported):
+            pip_commands("/v/py", ["x @ git+https://gitlab.com/a/b@c0ffee"])
+
 
 class TestVenvDir:
     def test_one_venv_per_family(self):

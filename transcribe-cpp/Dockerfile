@@ -80,6 +80,14 @@ COPY pyproject.toml /usr/src/app/
 COPY wyoming_transcribe_cpp/ /usr/src/app/wyoming_transcribe_cpp/
 RUN pip3 install --no-cache-dir --no-compile --no-deps /usr/src/app
 
+# Slim the /usr/local payload before the runtime COPY: strip native
+# wheels (sherpa-onnx alone carries tens of MB of symbols) and drop
+# bundled test suites/bytecode.
+RUN find /usr/local/lib/python3*/dist-packages -name '*.so*' -type f \
+        -exec strip --strip-unneeded {} + \
+    && find /usr/local/lib/python3*/dist-packages -type d \( -name tests -o -name __pycache__ \) \
+        -prune -exec rm -rf {} +
+
 # ---- runtime ----
 FROM ${BUILD_FROM}
 
@@ -92,7 +100,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     TRANSCRIBE_REF=${TRANSCRIBE_REF}
 
 # libopenblas0: host decoder BLAS. libstdc++6: C++ runtime for libtranscribe/
-# ggml. git: pip install of git+https converter deps (NeMo, GigaAM).
+# ggml. No git — github git+ converter deps install from commit tarballs.
 RUN \
     apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -101,8 +109,6 @@ RUN \
         libopenblas0 \
         libstdc++6 \
         ca-certificates \
-        git \
-        netcat-traditional \
     && rm -rf /var/lib/apt/lists/*
 
 # libtranscribe + ggml shared libs, transcribe-quantize, conversion scripts,
@@ -125,8 +131,7 @@ RUN ldconfig \
         /etc/s6-overlay/s6-rc.d/init-perms/run \
         /etc/s6-overlay/s6-rc.d/convert-worker/run
 
+# stdlib probe (netcat dropped from the image): send a Wyoming describe,
+# expect the service name back.
 HEALTHCHECK --start-period=10m \
-    CMD echo '{ "type": "describe" }' \
-        | nc -w 1 localhost 10380 \
-        | grep -qi "transcribe" \
-        || exit 1
+    CMD python3 -c 'import socket,sys; s=socket.create_connection(("localhost",10380),2); s.sendall(b"""{ "type": "describe" }\n"""); sys.exit(0 if b"transcribe" in s.recv(65536).lower() else 1)'
