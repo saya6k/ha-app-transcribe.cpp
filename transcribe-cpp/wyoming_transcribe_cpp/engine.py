@@ -114,9 +114,13 @@ class TranscribeStream:
         return self._stream.text().display
 
     def finalize(self) -> str:
-        """Flush the decoder and return the final text."""
+        """Flush the decoder and return the final text.
+
+        ``full`` is the complete final hypothesis; ``display``
+        (committed+tentative) can lag it after a late revision.
+        """
         self._stream.finalize()
-        return self._stream.text().display.strip()
+        return self._stream.text().full.strip()
 
     def close(self) -> None:
         """Reset the stream so the session can start the next one."""
