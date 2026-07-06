@@ -122,7 +122,8 @@ RUN ldconfig \
         /etc/s6-overlay/s6-rc.d/transcribe-cpp/run \
         /etc/s6-overlay/s6-rc.d/transcribe-cpp/finish \
         /etc/s6-overlay/s6-rc.d/discovery/run \
-        /etc/s6-overlay/s6-rc.d/init-perms/run
+        /etc/s6-overlay/s6-rc.d/init-perms/run \
+        /etc/s6-overlay/s6-rc.d/convert-worker/run
 
 HEALTHCHECK --start-period=10m \
     CMD echo '{ "type": "describe" }' \

@@ -7,14 +7,16 @@ import pytest
 from wyoming_transcribe_cpp import convert
 from wyoming_transcribe_cpp.convert import (
     CPU_INDEX,
+    OUTDIR_FAMILIES,
     ConversionUnsupported,
+    converter_cmd,
     custom_gguf_path,
     ensure_custom_gguf,
     parse_env_deps,
     pip_commands,
     venv_dir,
 )
-from wyoming_transcribe_cpp.detect import FAMILIES
+from wyoming_transcribe_cpp.detect import CONVERT_SCRIPTS, FAMILIES
 from wyoming_transcribe_cpp.weighthash import WeightIdentity, write_sidecar
 
 ENV_FIXTURES = Path(__file__).parent / "fixtures" / "envs"
@@ -80,6 +82,40 @@ class TestVenvDir:
         assert len(dirs) == len(FAMILIES)
         for d in dirs:
             assert str(d).startswith("/data/convert-venv/")
+
+
+class TestConverterCmd:
+    OUT = Path("/data/models/custom/o__m-REF.gguf")
+
+    def test_uniform_family_gets_positional_out_and_revision(self):
+        cmd = converter_cmd("whisper", "o/m", self.OUT, revision="abc123")
+        assert cmd[1].endswith("convert-whisper.py")
+        assert cmd[2:] == ["o/m", str(self.OUT), "--repo-id", "o/m",
+                           "--revision", "abc123"]
+
+    def test_nemo_families_have_no_revision_flag(self):
+        cmd = converter_cmd("canary", "o/m", self.OUT, revision="abc123")
+        assert "--revision" not in cmd
+
+    def test_outdir_families_use_outdir_instead_of_positional(self):
+        cmd = converter_cmd("granite_nar", "o/m", self.OUT, revision="r1")
+        assert str(self.OUT) not in cmd
+        assert "--outdir" in cmd
+        outdir = cmd[cmd.index("--outdir") + 1]
+        assert outdir.startswith(str(self.OUT.parent))
+
+    def test_gigaam_is_rejected_with_guidance(self):
+        with pytest.raises(ConversionUnsupported) as err:
+            converter_cmd("gigaam", "o/m", self.OUT)
+        assert "curated" in str(err.value)
+
+    @pytest.mark.parametrize(
+        "family", sorted(FAMILIES - {"gigaam"})
+    )
+    def test_every_family_routes_to_its_script(self, family):
+        cmd = converter_cmd(family, "o/m", self.OUT)
+        assert cmd[1].endswith(CONVERT_SCRIPTS[family])
+        assert cmd[0].startswith(str(venv_dir(family)))
 
 
 IDENT = WeightIdentity(

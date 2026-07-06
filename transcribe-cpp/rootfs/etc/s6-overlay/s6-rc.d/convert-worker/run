@@ -1,0 +1,17 @@
+#!/command/with-contenv bashio
+# vim: ft=bash
+# shellcheck shell=bash
+# ==============================================================================
+# Conversion worker: JSON-lines service on a unix socket, one handler per
+# connection (no idle daemon). Drops to the converter user BEFORE binding
+# so the socket is owned converter:transcribe with mode 0660 — the only
+# IPC channel the transcribe server may use.
+# ==============================================================================
+
+# pip/HF caches land in converter-owned, backup-excluded territory.
+export HOME=/data/convert-venv
+
+exec s6-setuidgid converter \
+    s6-ipcserver-socketbinder -a 0660 /run/transcribe-cpp/convert.sock \
+    s6-ipcserverd \
+    python3 -m wyoming_transcribe_cpp.convert_worker

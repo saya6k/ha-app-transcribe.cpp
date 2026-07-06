@@ -115,9 +115,11 @@ async def main() -> None:
 
     token = args.hf_token or os.environ.get("HF_TOKEN") or None
     if args.custom_model:
-        from .convert import ensure_custom_gguf
+        # Conversion runs in the unprivileged convert-worker; this process
+        # (transcribe user) only talks to it over the unix socket.
+        from .convert import request_conversion
 
-        gguf = ensure_custom_gguf(
+        gguf = request_conversion(
             args.custom_model, args.quantization, args.model_dir, token
         )
         model_name = args.custom_model
