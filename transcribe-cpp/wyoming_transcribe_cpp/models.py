@@ -1,0 +1,98 @@
+"""Model registry, quantization resolution, and GGUF download.
+
+The registry mirrors upstream's ``scripts/hf_cards/*.yaml`` (one entry per
+released GGUF repo). Phase 1 carries only the default model; the full
+catalog is generated from the pinned upstream checkout in Phase 2.
+"""
+
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass, field
+from pathlib import Path
+
+from .const import QUANT_ALIASES, QUANT_ORDER
+
+_LOGGER = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class ModelEntry:
+    repo: str
+    license: str
+    streaming: bool
+    quants: dict[str, str]  # precision name -> GGUF filename
+    languages: tuple[str, ...] = field(default=())
+
+
+DEFAULT_MODEL = "whisper-large-v3-turbo"
+
+REGISTRY: dict[str, ModelEntry] = {
+    "whisper-large-v3-turbo": ModelEntry(
+        repo="handy-computer/whisper-large-v3-turbo-gguf",
+        license="apache-2.0",
+        streaming=False,
+        quants={
+            "F16": "whisper-large-v3-turbo-F16.gguf",
+            "Q8_0": "whisper-large-v3-turbo-Q8_0.gguf",
+            "Q6_K": "whisper-large-v3-turbo-Q6_K.gguf",
+            "Q5_K_M": "whisper-large-v3-turbo-Q5_K_M.gguf",
+            "Q4_K_M": "whisper-large-v3-turbo-Q4_K_M.gguf",
+        },
+    ),
+}
+
+
+def resolve_quant(requested: str, available: list[str]) -> str:
+    """Map a config quant (e.g. ``q4_k_m``) to an available GGUF precision.
+
+    Exact match wins; otherwise walk QUANT_ORDER upward and take the nearest
+    *larger* precision (never smaller — that would silently degrade quality).
+    """
+    name = QUANT_ALIASES.get(requested.lower())
+    if name is None:
+        raise ValueError(f"Unknown quantization: {requested!r}")
+    have = {q.upper() for q in available}
+    start = QUANT_ORDER.index(name)
+    for candidate in QUANT_ORDER[start:]:
+        if candidate in have:
+            if candidate != name:
+                _LOGGER.warning(
+                    "Quantization %s not published for this model; using %s",
+                    name, candidate,
+                )
+            return candidate
+    raise ValueError(
+        f"No usable precision for request {name!r} among {sorted(have)!r}"
+    )
+
+
+def gguf_cache_path(models_dir: str | Path, repo: str, filename: str) -> Path:
+    """Local cache location for one GGUF: <models_dir>/<owner>__<repo>/<file>."""
+    return Path(models_dir) / repo.replace("/", "__") / filename
+
+
+def ensure_gguf(
+    model: str, quantization: str, models_dir: str | Path, token: str | None
+) -> Path:
+    """Download the selected model+quant into the cache; return the path."""
+    entry = REGISTRY[model]
+    quant = resolve_quant(quantization, list(entry.quants))
+    filename = entry.quants[quant]
+    dest = gguf_cache_path(models_dir, entry.repo, filename)
+    if dest.exists():
+        _LOGGER.info("Model cached: %s", dest)
+        return dest
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    _LOGGER.info("Downloading %s from %s ...", filename, entry.repo)
+    from huggingface_hub import hf_hub_download
+
+    hf_hub_download(
+        repo_id=entry.repo,
+        filename=filename,
+        local_dir=dest.parent,
+        token=token,
+    )
+    if not dest.exists():
+        raise FileNotFoundError(f"Download finished but {dest} is missing")
+    return dest
