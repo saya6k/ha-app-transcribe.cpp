@@ -20,7 +20,7 @@ on-device).
 
 ### Core features
 
-1. **Wyoming STT server** on port `10370/tcp`, using transcribe.cpp built
+1. **Wyoming STT server** on port `10380/tcp`, using transcribe.cpp built
    from a pinned commit SHA as a shared library with its official Python
    binding.
    - **Streaming included in v1**: follow the `wyoming_nemotron_asr_c`
@@ -52,7 +52,7 @@ on-device).
    - **Review result (voiceprint delegation):** for Assist utterances
      (single speaker per request) built-in diarization adds little; the
      recommended setup is chaining `ha-app-voiceprint` in front
-     (`HA → voiceprint:10350 → this app:10370`), which yields *named*
+     (`HA → voiceprint:10350 → this app:10380`), which yields *named*
      speakers from enrollment instead of anonymous "Speaker N". DOCS.md
      documents this chain as the preferred speaker-attribution path.
      Built-in diarization is for long-form / multi-speaker audio where a
@@ -120,8 +120,8 @@ container build --arg BUILD_FROM=ghcr.io/home-assistant/base-debian:trixie \
 # Python unit tests
 cd transcribe-cpp && python3 -m pytest tests/
 
-# Local run (Wyoming on 10370)
-container run --rm -p 10370:10370 -v "$PWD/test-data:/data" local/transcribe-cpp
+# Local run (Wyoming on 10380)
+container run --rm -p 10380:10380 -v "$PWD/test-data:/data" local/transcribe-cpp
 ```
 
 CI (GitHub Actions) keeps using the HA builder / docker as in sibling repos.
@@ -139,7 +139,7 @@ ha-app-transcribe.cpp/
 │     # repository-dispatch "app-released" to ha-apps (store repo)
 └── transcribe-cpp/                  # app slug: transcribe-cpp
     ├── config.yaml                  # version: dev, discovery: wyoming,
-    │                                # ports: 10370/tcp, backup_exclude
+    │                                # ports: 10380/tcp, backup_exclude
     ├── Dockerfile                   # 2-stage; ARG TRANSCRIBE_REF +
     │                                # ARG FASTENHANCER_REF (pinned SHAs);
     │                                # builder compiles libtranscribe(+ggml)

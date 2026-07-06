@@ -1,0 +1,23 @@
+---
+configuration:
+  model:
+    name: Model
+    description: >-
+      Which ASR model to download and run, from the transcribe.cpp GGUF
+      catalog. The language comes from the Home Assistant voice pipeline.
+      Changing this downloads the new model on next start.
+  quantization:
+    name: Model quantization
+    description: >-
+      GGUF weight precision of the downloaded model. q4_k_m = smallest/fastest
+      and lowest RAM (default); f16 = best quality but much larger. If the
+      selected model doesn't publish the chosen precision, the nearest larger
+      one is used automatically. Changing this re-downloads the model.
+  hf_token:
+    name: HuggingFace token
+    description: >-
+      Optional access token for gated/private model repos and to lift anonymous
+      download rate limits. Leave empty for public models.
+  debug_logging:
+    name: Debug logging
+    description: Enable verbose logging for troubleshooting.

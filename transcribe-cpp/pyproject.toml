@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wyoming-transcribe-cpp"
+version = "0.1.0"
+description = "Wyoming STT bridge for the transcribe.cpp GGUF model catalog (ggml)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [{ name = "ha-app-transcribe.cpp contributors" }]
+keywords = ["home-assistant", "wyoming", "stt", "asr", "whisper", "parakeet", "ggml", "gguf"]
+
+dependencies = [
+    "wyoming>=1.9,<2",
+    "huggingface_hub",
+    "numpy",
+    # transcribe_cpp (the upstream ctypes binding) is installed --no-deps in
+    # the Dockerfile and loads our built libtranscribe.so via TRANSCRIBE_LIBRARY.
+]
+
+[project.scripts]
+wyoming-transcribe-cpp = "wyoming_transcribe_cpp.__main__:run"
+
+[tool.setuptools]
+packages = ["wyoming_transcribe_cpp"]

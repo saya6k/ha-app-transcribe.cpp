@@ -111,7 +111,7 @@ options: model/quantization/language/hf_token/debug_logging),
 
 **Acceptance criteria:**
 - [ ] `yamllint .` / `markdownlint` pass
-- [ ] `config.yaml` schema valid (slug `transcribe-cpp`, port 10370, discovery wyoming, backup_exclude)
+- [ ] `config.yaml` schema valid (slug `transcribe-cpp`, port 10380, discovery wyoming, backup_exclude)
 
 **Verification:** lint commands from SPEC §2.
 **Dependencies:** none. **Scope:** M.

@@ -1,0 +1,30 @@
+---
+version: dev
+slug: transcribe-cpp
+name: Transcribe (cpp)
+description: >-
+  Speech-to-text over Wyoming — the full transcribe.cpp GGUF model catalog
+  (Whisper, Parakeet, Qwen3-ASR, Moonshine, …) on ggml
+url: https://github.com/saya6k/ha-app-transcribe.cpp
+arch:
+  - amd64
+  - aarch64
+init: false
+discovery:
+  - wyoming
+backup_exclude:
+  - models/**
+options:
+  model: whisper-large-v3-turbo
+  quantization: q4_k_m
+  hf_token: ''
+schema:
+  model: list(whisper-large-v3-turbo)
+  quantization: list(q4_k_m|q5_k_m|q6_k|q8_0|f16)
+  hf_token: password?
+  debug_logging: bool?
+ports:
+  10380/tcp: null
+ports_description:
+  10380/tcp: Transcribe (cpp) Wyoming Protocol
+homeassistant: 2023.8.0.dev20230718

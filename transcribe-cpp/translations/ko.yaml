@@ -1,0 +1,23 @@
+---
+configuration:
+  model:
+    name: 모델
+    description: >-
+      다운로드해서 실행할 ASR 모델(transcribe.cpp GGUF 카탈로그). 언어는 Home
+      Assistant 음성 파이프라인에서 자동으로 전달됩니다. 변경하면 다음 시작 시
+      새 모델을 다운로드합니다.
+  quantization:
+    name: 모델 양자화
+    description: >-
+      다운로드할 모델의 GGUF 가중치 정밀도입니다. q4_k_m은 가장 작고 빠르며
+      메모리를 적게 씁니다(기본값); f16은 품질이 가장 좋지만 훨씬 큽니다.
+      선택한 모델에 해당 정밀도가 없으면 자동으로 가장 가까운 상위 정밀도를
+      사용합니다. 변경하면 모델을 다시 다운로드합니다.
+  hf_token:
+    name: HuggingFace 토큰
+    description: >-
+      비공개/게이트 모델 저장소 접근 및 익명 다운로드 속도 제한 해제를 위한
+      선택적 토큰입니다. 공개 모델은 비워두세요.
+  debug_logging:
+    name: 디버그 로깅
+    description: 문제 해결을 위한 상세 로그를 활성화합니다.
