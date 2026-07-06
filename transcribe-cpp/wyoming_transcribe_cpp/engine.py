@@ -30,7 +30,7 @@ class TranscribeEngine:
             model_path, getattr(tc, "__version__", "?"), tc.native_version(),
         )
         self._model = tc.Model(model_path)
-        caps = self._model.capabilities()
+        caps = self._model.capabilities  # property on the binding
         self.sample_rate: int = caps.native_sample_rate
         self.languages: tuple[str, ...] = caps.languages
         self.supports_streaming: bool = caps.supports_streaming
