@@ -10,10 +10,14 @@ export HOME=/data
 mkdir -p /data/models
 
 flags=()
-bashio::config.has_value 'model'        && flags+=('--model'        "$(bashio::config 'model')")
-bashio::config.has_value 'quantization' && flags+=('--quantization' "$(bashio::config 'quantization')")
-bashio::config.has_value 'hf_token'     && flags+=('--hf-token'     "$(bashio::config 'hf_token')")
-bashio::config.true 'debug_logging'     && flags+=('--debug')
+bashio::config.has_value 'model'         && flags+=('--model'         "$(bashio::config 'model')")
+bashio::config.has_value 'quantization'  && flags+=('--quantization'  "$(bashio::config 'quantization')")
+bashio::config.has_value 'custom_model'  && flags+=('--custom-model'  "$(bashio::config 'custom_model')")
+bashio::config.has_value 'max_speakers'  && flags+=('--max-speakers'  "$(bashio::config 'max_speakers')")
+bashio::config.has_value 'hf_token'      && flags+=('--hf-token'      "$(bashio::config 'hf_token')")
+bashio::config.true 'speech_enhancement' && flags+=('--speech-enhancement')
+bashio::config.true 'diarization'        && flags+=('--diarization')
+bashio::config.true 'debug_logging'      && flags+=('--debug')
 
 # Quote the array so flag values containing spaces stay one argument each.
 exec python3 -m wyoming_transcribe_cpp \

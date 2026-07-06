@@ -47,8 +47,9 @@ RUN cmake -B build -G Ninja \
         -DTRANSCRIBE_BUILD_EXAMPLES=OFF \
         -DGGML_NATIVE=OFF \
     && cmake --build build -j --target transcribe transcribe-quantize \
-    && find build -name '*.so*' -type f -exec cp -a {} /usr/local/lib/ \; \
-    && find /usr/local/lib -name '*.so' -type f -exec strip --strip-unneeded {} \; \
+    && find build -name '*.so*' \( -type f -o -type l \) -exec cp -a {} /usr/local/lib/ \; \
+    && find /usr/local/lib -name '*.so*' -type f -exec strip --strip-unneeded {} \; \
+    && test -e /usr/local/lib/libtranscribe.so \
     && install -m 0755 "$(find build -name transcribe-quantize -type f | head -n1)" \
         /usr/local/bin/transcribe-quantize \
     && strip --strip-unneeded /usr/local/bin/transcribe-quantize
@@ -58,7 +59,7 @@ RUN cmake -B build -G Ninja \
 RUN mkdir -p /usr/local/share/transcribe-cpp \
     && cp -r scripts /usr/local/share/transcribe-cpp/scripts
 
-RUN pip3 install --no-cache-dir --no-compile "wyoming>=1.9,<2" "huggingface_hub" "numpy" \
+RUN pip3 install --no-cache-dir --no-compile "wyoming>=1.9,<2" "huggingface_hub" "numpy" "sherpa-onnx" \
     && pip3 install --no-cache-dir --no-compile --no-deps /src/bindings/python
 COPY pyproject.toml /usr/src/app/
 COPY wyoming_transcribe_cpp/ /usr/src/app/wyoming_transcribe_cpp/

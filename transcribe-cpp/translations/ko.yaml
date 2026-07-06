@@ -13,6 +13,29 @@ configuration:
       메모리를 적게 씁니다(기본값); f16은 품질이 가장 좋지만 훨씬 큽니다.
       선택한 모델에 해당 정밀도가 없으면 자동으로 가장 가까운 상위 정밀도를
       사용합니다. 변경하면 모델을 다시 다운로드합니다.
+  custom_model:
+    name: 커스텀 모델 (HuggingFace repo ID)
+    description: >-
+      직접 파인튜닝한 체크포인트(예: Whisper 파인튜닝)를 이 기기에서 GGUF로
+      변환해 사용합니다 — 위의 모델 선택보다 우선합니다. 최초 변환 시
+      torch-cpu를 /data에 설치하므로 느리며, 결과는 캐시됩니다. Whisper
+      아키텍처 체크포인트를 지원합니다.
+  speech_enhancement:
+    name: 음성 향상
+    description: >-
+      GTCRN으로 각 발화의 잡음을 제거한 뒤 전사합니다. 시끄러운 환경에서
+      유용하며, 지연이 약간 늘고 실시간 부분 전사가 비활성화됩니다.
+  diarization:
+    name: 화자 분리
+    description: >-
+      다화자 오디오에 [Speaker N] 태그를 붙입니다. Assist 음성 명령에는
+      Voiceprint 애드온을 앞단에 체이닝하면 등록된 이름으로 화자를 태그할 수
+      있습니다. 실시간 부분 전사가 비활성화됩니다.
+  max_speakers:
+    name: 최대 화자 수
+    description: >-
+      선택적 화자 분리 힌트 — 예상되는 화자 수입니다. 비워두면 자동으로
+      클러스터링합니다.
   hf_token:
     name: HuggingFace 토큰
     description: >-

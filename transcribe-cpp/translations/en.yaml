@@ -13,6 +13,29 @@ configuration:
       and lowest RAM (default); f16 = best quality but much larger. If the
       selected model doesn't publish the chosen precision, the nearest larger
       one is used automatically. Changing this re-downloads the model.
+  custom_model:
+    name: Custom model (HuggingFace repo ID)
+    description: >-
+      Convert your own fine-tuned checkpoint (e.g. a Whisper fine-tune) to
+      GGUF on this device and serve it — overrides the model selection above.
+      First conversion installs torch-cpu into /data and is slow; the result
+      is cached. Whisper-architecture checkpoints are supported.
+  speech_enhancement:
+    name: Speech enhancement
+    description: >-
+      Denoise each utterance with GTCRN before transcription. Helps in noisy
+      rooms; adds a little latency and disables live partial transcripts.
+  diarization:
+    name: Speaker diarization
+    description: >-
+      Tag the transcript with [Speaker N] labels for multi-speaker audio.
+      For Assist voice commands, chaining the Voiceprint add-on in front
+      gives named speakers instead. Disables live partial transcripts.
+  max_speakers:
+    name: Max speakers
+    description: >-
+      Optional diarization hint — the number of distinct speakers to expect.
+      Leave unset for automatic clustering.
   hf_token:
     name: HuggingFace token
     description: >-

@@ -21,8 +21,9 @@ from .models import DEFAULT_MODEL, REGISTRY, ensure_gguf
 _LOGGER = logging.getLogger(__name__)
 
 
-def _build_info(model: str, engine: TranscribeEngine) -> Info:
-    repo = REGISTRY[model].repo
+def _build_info(
+    model: str, repo: str, engine: TranscribeEngine, streaming: bool
+) -> Info:
     return Info(
         asr=[
             AsrProgram(
@@ -34,7 +35,7 @@ def _build_info(model: str, engine: TranscribeEngine) -> Info:
                 ),
                 installed=True,
                 version=__version__,
-                supports_transcript_streaming=engine.supports_streaming,
+                supports_transcript_streaming=streaming,
                 models=[
                     AsrModel(
                         name=model,
@@ -66,8 +67,25 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--model-dir", default=MODELS_DIR)
     parser.add_argument(
+        "--custom-model", default="",
+        help="HF repo id of a fine-tuned checkpoint to convert+quantize "
+             "on-device (overrides --model)",
+    )
+    parser.add_argument(
         "--language", default=None,
         help="Fallback language when the client doesn't specify one",
+    )
+    parser.add_argument(
+        "--speech-enhancement", action="store_true",
+        help="Denoise each utterance with GTCRN before decoding",
+    )
+    parser.add_argument(
+        "--diarization", action="store_true",
+        help="Tag the final transcript with [Speaker N] labels",
+    )
+    parser.add_argument(
+        "--max-speakers", type=int, default=0,
+        help="Diarization cluster count hint (0 = auto)",
     )
     parser.add_argument("--hf-token", default="")
     parser.add_argument("--debug", action="store_true")
@@ -82,7 +100,18 @@ async def main() -> None:
     )
 
     token = args.hf_token or os.environ.get("HF_TOKEN") or None
-    gguf = ensure_gguf(args.model, args.quantization, args.model_dir, token)
+    if args.custom_model:
+        from .convert import ensure_custom_gguf
+
+        gguf = ensure_custom_gguf(
+            args.custom_model, args.quantization, args.model_dir, token
+        )
+        model_name = args.custom_model
+        model_repo = args.custom_model
+    else:
+        gguf = ensure_gguf(args.model, args.quantization, args.model_dir, token)
+        model_name = args.model
+        model_repo = REGISTRY[args.model].repo
     _LOGGER.info("Model file ready: %s", gguf)
 
     engine = TranscribeEngine(str(gguf))
@@ -90,11 +119,40 @@ async def main() -> None:
         _LOGGER.info("Warming up ...")
         engine.warmup()
 
-        wyoming_info = _build_info(args.model, engine)
+        enhancer = None
+        if args.speech_enhancement:
+            from .enhance import Enhancer
+
+            _LOGGER.info("Speech enhancement enabled — loading GTCRN ...")
+            enhancer = Enhancer(args.model_dir)
+
+        diarizer = None
+        if args.diarization:
+            from .diarize import Diarizer
+
+            _LOGGER.info("Diarization enabled — loading sherpa-onnx models ...")
+            diarizer = Diarizer(args.model_dir, max_speakers=args.max_speakers)
+
+        from .streaming import decode_mode
+
+        streaming = (
+            decode_mode(
+                engine.supports_streaming,
+                enhancement=enhancer is not None,
+                diarization=diarizer is not None,
+            )
+            == "stream"
+        )
+        wyoming_info = _build_info(model_name, model_repo, engine, streaming)
         server = AsyncServer.from_uri(args.uri)
         _LOGGER.info("Starting server on %s", args.uri)
         server_task = asyncio.create_task(
-            server.run(partial(TranscribeHandler, wyoming_info, args, engine))
+            server.run(
+                partial(
+                    TranscribeHandler, wyoming_info, args, engine,
+                    enhancer, diarizer,
+                )
+            )
         )
         loop = asyncio.get_running_loop()
         loop.add_signal_handler(signal.SIGINT, server_task.cancel)
