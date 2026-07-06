@@ -6,7 +6,7 @@
 # ==============================================================================
 declare config
 
-# Wait for Transcribe (cpp) to become available
+# Wait for Transcribe.cpp to become available
 bash -c \
     "until
         echo '{ \"type\": \"describe\" }'

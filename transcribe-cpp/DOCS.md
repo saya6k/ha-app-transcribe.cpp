@@ -1,9 +1,9 @@
-# Home Assistant App: Transcribe (cpp)
+# Home Assistant App: Transcribe.cpp
 
 ## How it works
 
 ```text
-HA Assist ──► Transcribe (cpp) (this app, :10380)
+HA Assist ──► Transcribe.cpp (this app, :10380)
 ```
 
 Speech-to-text over the [Wyoming protocol](https://github.com/rhasspy/wyoming),
@@ -31,7 +31,7 @@ final transcript at end of utterance.
 | `diarization` | `false` | Tag the final transcript with `[Speaker N]` (disables live partials) |
 | `max_speakers` | unset | Diarization hint: expected number of speakers (unset = auto) |
 | `hf_token` | `''` | HuggingFace token for gated repos / rate limits |
-| `debug_logging` | `false` | Verbose logging |
+| `log_level` | `info` | Log verbosity: trace–fatal |
 
 ## Custom fine-tuned models (`custom_model`)
 
@@ -56,7 +56,7 @@ diarization only yields anonymous `[Speaker 1]` labels. Chaining the
 you *named*, enrolled speakers instead — that is the recommended setup:
 
 ```text
-HA Assist ──► Voiceprint (:10350) ──► Transcribe (cpp) (:10380)
+HA Assist ──► Voiceprint (:10350) ──► Transcribe.cpp (:10380)
 ```
 
 Enable this app's `diarization` for **multi-speaker recordings** (meetings,

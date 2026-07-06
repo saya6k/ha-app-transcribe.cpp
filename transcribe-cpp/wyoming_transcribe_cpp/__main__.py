@@ -27,7 +27,7 @@ def _build_info(
     return Info(
         asr=[
             AsrProgram(
-                name="Transcribe (cpp)",
+                name="Transcribe.cpp",
                 description="transcribe.cpp GGUF ASR on ggml",
                 attribution=Attribution(
                     name="handy-computer",
@@ -54,8 +54,19 @@ def _build_info(
     )
 
 
+_LOG_LEVEL_MAP = {
+    "trace": logging.DEBUG,
+    "debug": logging.DEBUG,
+    "info": logging.INFO,
+    "notice": logging.INFO,
+    "warning": logging.WARNING,
+    "error": logging.ERROR,
+    "fatal": logging.CRITICAL,
+}
+
+
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Transcribe (cpp) Wyoming server")
+    parser = argparse.ArgumentParser(description="Transcribe.cpp Wyoming server")
     parser.add_argument("--uri", default=f"tcp://0.0.0.0:{PORT}")
     parser.add_argument(
         "--model", default=DEFAULT_MODEL, choices=sorted(REGISTRY),
@@ -88,14 +99,17 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Diarization cluster count hint (0 = auto)",
     )
     parser.add_argument("--hf-token", default="")
-    parser.add_argument("--debug", action="store_true")
+    parser.add_argument(
+        "--log-level", default="info", choices=sorted(_LOG_LEVEL_MAP),
+        help="Log verbosity (HA log level names)",
+    )
     return parser.parse_args(argv)
 
 
 async def main() -> None:
     args = _parse_args()
     logging.basicConfig(
-        level=logging.DEBUG if args.debug else logging.INFO,
+        level=_LOG_LEVEL_MAP.get(args.log_level, logging.INFO),
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     )
 

@@ -41,6 +41,8 @@ configuration:
     description: >-
       Optional access token for gated/private model repos and to lift anonymous
       download rate limits. Leave empty for public models.
-  debug_logging:
-    name: Debug logging
-    description: Enable verbose logging for troubleshooting.
+  log_level:
+    name: Log level
+    description: >-
+      Verbosity of the app log. Use debug/trace for troubleshooting;
+      info (default) for normal operation.
