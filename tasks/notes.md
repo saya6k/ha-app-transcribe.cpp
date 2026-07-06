@@ -71,3 +71,23 @@ Date: 2026-07-06
   utterance at AudioStop. When enhancement is enabled, decode is
   batch-at-utterance-end (streaming partials disabled for that session) —
   pre-approved by SPEC. Revisit FastEnhancer if the port gains a license.
+
+## Local smoke recipes (Apple Container CLI)
+
+bashio reads options from the Supervisor API, so local runs bypass s6:
+
+```sh
+container build -t local/transcribe-cpp transcribe-cpp/
+container run -d --name t -v <data>:/data -v <smoke>:/smoke \
+  --entrypoint python3 local/transcribe-cpp -m wyoming_transcribe_cpp <flags>
+container exec t python3 /smoke/wyoming_client.py /smoke/jfk.wav
+```
+
+Verified 2026-07-06 (aarch64):
+- default (whisper-large-v3-turbo q4_k_m): jfk.wav + ko.wav exact ✓
+- --model moonshine-streaming-tiny: TranscriptChunk partials + full final ✓
+- --diarization: two-speakers.wav -> [Speaker 1]/[Speaker 2] ✓
+- --speech-enhancement: GTCRN download + decode ✓
+- --custom-model openai/whisper-tiny: venv bootstrap -> convert -> Q8_0 ->
+  serve ✓; cache hit on restart ✓
+- runtime layers added over base-debian: 4 (budget ≤5)
