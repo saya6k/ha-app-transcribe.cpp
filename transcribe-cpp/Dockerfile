@@ -29,10 +29,17 @@ RUN \
         python3-pip \
     && rm -rf /var/lib/apt/lists/*
 
+# Partial clone (blob:none) + sparse checkout: upstream ships ~33 MB of
+# sample WAVs plus reports/docs/tests we never build — skip their blobs
+# entirely instead of downloading and discarding them.
 WORKDIR /src
 RUN git init -q . \
     && git remote add origin https://github.com/handy-computer/transcribe.cpp.git \
-    && git fetch --depth 1 origin "${TRANSCRIBE_REF}" \
+    && git config remote.origin.promisor true \
+    && git config remote.origin.partialclonefilter blob:none \
+    && git sparse-checkout set --no-cone \
+        '/*' '!/samples' '!/reports' '!/docs' '!/tests' \
+    && git fetch --depth 1 --filter=blob:none origin "${TRANSCRIBE_REF}" \
     && git checkout -q FETCH_HEAD
 
 # Shared lib + quantize tool only (no CLI/examples/tests). System BLAS stays
@@ -55,9 +62,12 @@ RUN cmake -B build -G Ninja \
     && strip --strip-unneeded /usr/local/bin/transcribe-quantize
 
 # Upstream conversion scripts (torch runs from a lazy /data venv at runtime,
-# never from the image) — needed by the custom_model pipeline.
-RUN mkdir -p /usr/local/share/transcribe-cpp \
-    && cp -r scripts /usr/local/share/transcribe-cpp/scripts
+# never from the image) — needed by the custom_model pipeline. Only the
+# converters + their shared lib/ (~0.7 MB); the rest of scripts/ (uv lockfiles,
+# CI, WER tooling — ~6 MB) is dev-only upstream.
+RUN mkdir -p /usr/local/share/transcribe-cpp/scripts \
+    && cp scripts/convert-*.py /usr/local/share/transcribe-cpp/scripts/ \
+    && cp -r scripts/lib /usr/local/share/transcribe-cpp/scripts/lib
 
 RUN pip3 install --no-cache-dir --no-compile "wyoming>=1.9,<2" "huggingface_hub" "numpy" "sherpa-onnx" \
     && pip3 install --no-cache-dir --no-compile --no-deps /src/bindings/python

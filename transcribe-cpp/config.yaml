@@ -12,8 +12,13 @@ arch:
 init: false
 discovery:
   - wyoming
+# Everything heavy lives under /data and is re-downloadable — keep all of it
+# out of HA backups: GGUFs (models/), the torch-cpu conversion venv, and the
+# HuggingFace download cache (HOME=/data).
 backup_exclude:
   - models/**
+  - convert-venv/**
+  - .cache/**
 options:
   model: whisper-large-v3-turbo
   quantization: q4_k_m
