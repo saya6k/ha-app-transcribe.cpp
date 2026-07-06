@@ -236,6 +236,16 @@ _REVISION_FAMILIES = frozenset({
     "sensevoice", "funasr_nano", "granite", "granite_nar", "medasr",
     "voxtral", "voxtral_realtime",
 })
+# How the base variant reaches each converter — they differ:
+#   --variant flag                      (most transformers-side families)
+#   out_path.parent.name                (parakeet: slug = output dir name)
+#   slug_from_repo_id(--repo-id)        (canary, canary_qwen)
+_VARIANT_FLAG_FAMILIES = frozenset({
+    "whisper", "moonshine", "moonshine_streaming", "qwen3_asr",
+    "sensevoice", "funasr_nano", "granite", "voxtral", "voxtral_realtime",
+})
+SLUGDIR_FAMILIES = frozenset({"parakeet"})
+_REPOID_VARIANT_FAMILIES = frozenset({"canary", "canary_qwen"})
 
 
 def _outdir_for(out_path: Path) -> Path:
@@ -261,14 +271,29 @@ def converter_cmd(
             "(upstream converter only fetches official GigaAM weights); "
             "pick a gigaam model from the curated catalog instead."
         )
+    if family in SLUGDIR_FAMILIES | _REPOID_VARIANT_FAMILIES and not variant:
+        raise ConversionUnsupported(
+            f"{family} conversion needs a recognizable base variant to "
+            "dispatch the converter. Add a base_model tag to the HF repo "
+            "(e.g. base_model:nvidia/parakeet-tdt-0.6b-v2) or include the "
+            "base catalog slug in the repo name."
+        )
     cmd = [str(_venv_python(family)), str(SCRIPTS_DIR / CONVERT_SCRIPTS[family]), repo]
     if family in OUTDIR_FAMILIES:
         cmd += ["--repo-id", repo, "--outdir", str(_outdir_for(out_path))]
+    elif family in SLUGDIR_FAMILIES:
+        cmd += [
+            str(out_path.parent / variant / out_path.name), "--repo-id", repo,
+        ]
+    elif family in _REPOID_VARIANT_FAMILIES:
+        # slug_from_repo_id(--repo-id) picks the variant profile; the
+        # bare catalog slug passes through it unchanged.
+        cmd += [str(out_path), "--repo-id", variant]
     else:
         cmd += [str(out_path), "--repo-id", repo]
     if revision and family in _REVISION_FAMILIES:
         cmd += ["--revision", revision]
-    if variant:
+    if variant and family in _VARIANT_FLAG_FAMILIES:
         cmd += ["--variant", variant]
     return cmd
 
@@ -314,6 +339,8 @@ def ensure_custom_gguf(
             "Converting %s (family %s) to reference GGUF (torch-cpu, "
             "slow) ...", repo, family,
         )
+        if family in SLUGDIR_FAMILIES and variant:
+            (ref.parent / variant).mkdir(parents=True, exist_ok=True)
         _run(
             converter_cmd(family, repo, ref, identity.revision, variant),
             env=env,
@@ -328,6 +355,9 @@ def ensure_custom_gguf(
                 )
             produced[0].replace(ref)
             shutil.rmtree(outdir)
+        elif family in SLUGDIR_FAMILIES and variant:
+            (ref.parent / variant / ref.name).replace(ref)
+            shutil.rmtree(ref.parent / variant)
     _LOGGER.info("Quantizing to %s ...", quant)
     resolved = resolve_quant(
         quantization, ["F16", "Q8_0", "Q6_K", "Q5_K_M", "Q4_K_M"]

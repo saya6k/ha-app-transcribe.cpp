@@ -204,8 +204,37 @@ class TestConverterCmd:
                            "--revision", "abc123"]
 
     def test_nemo_families_have_no_revision_flag(self):
-        cmd = converter_cmd("canary", "o/m", self.OUT, revision="abc123")
+        cmd = converter_cmd(
+            "canary", "o/m", self.OUT, revision="abc123",
+            variant="canary-1b-flash",
+        )
         assert "--revision" not in cmd
+
+    def test_parakeet_variant_travels_via_out_dir_name(self):
+        # convert-parakeet.py has no --variant flag; it dispatches on
+        # out_path.parent.name.
+        cmd = converter_cmd(
+            "parakeet", "o/m", self.OUT, variant="parakeet-tdt-0.6b-v2"
+        )
+        assert "--variant" not in cmd
+        out = cmd[2 + 1]  # python, script, repo, <out>
+        assert out == str(self.OUT.parent / "parakeet-tdt-0.6b-v2" / self.OUT.name)
+        assert cmd[cmd.index("--repo-id") + 1] == "o/m"
+
+    def test_canary_variant_travels_via_repo_id(self):
+        # convert-canary.py derives the variant from slug_from_repo_id.
+        cmd = converter_cmd(
+            "canary", "o/m", self.OUT, variant="canary-1b-flash"
+        )
+        assert "--variant" not in cmd
+        assert cmd[cmd.index("--repo-id") + 1] == "canary-1b-flash"
+        assert str(self.OUT) in cmd
+
+    def test_nemo_family_without_variant_fails_with_guidance(self):
+        for family in ("parakeet", "canary", "canary_qwen"):
+            with pytest.raises(ConversionUnsupported) as err:
+                converter_cmd(family, "o/m", self.OUT, variant=None)
+            assert "base_model" in str(err.value)
 
     def test_outdir_families_use_outdir_instead_of_positional(self):
         cmd = converter_cmd("granite_nar", "o/m", self.OUT, revision="r1")
@@ -223,7 +252,7 @@ class TestConverterCmd:
         "family", sorted(FAMILIES - {"gigaam"})
     )
     def test_every_family_routes_to_its_script(self, family):
-        cmd = converter_cmd(family, "o/m", self.OUT)
+        cmd = converter_cmd(family, "o/m", self.OUT, variant="some-variant")
         assert cmd[1].endswith(CONVERT_SCRIPTS[family])
         assert cmd[0].startswith(str(venv_dir(family)))
 
