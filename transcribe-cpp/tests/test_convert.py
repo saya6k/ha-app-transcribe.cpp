@@ -194,6 +194,27 @@ class TestEnsurePython312:
             convert.ensure_python312()
 
 
+class TestCheckReturncode:
+    def test_zero_passes(self):
+        convert._check_returncode(0, ["p", "s"])
+
+    def test_positive_raises_calledprocesserror(self):
+        import subprocess
+
+        with pytest.raises(subprocess.CalledProcessError):
+            convert._check_returncode(2, ["p", "s"])
+
+    def test_sigkill_raises_conversionfailed_with_oom_hint(self):
+        from wyoming_transcribe_cpp.convert import ConversionFailed
+
+        with pytest.raises(ConversionFailed) as err:
+            convert._check_returncode(-9, ["p", "convert-parakeet.py"])
+        msg = str(err.value)
+        assert "SIGKILL" in msg
+        assert "OOM" in msg
+        assert "convert-parakeet.py" in msg
+
+
 class TestConverterCmd:
     OUT = Path("/data/models/custom/o__m-REF.gguf")
 

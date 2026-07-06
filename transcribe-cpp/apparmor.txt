@@ -36,6 +36,9 @@ profile hassio_transcribe_cpp flags=(attach_disconnected,mediate_deleted) {
   /dev/tty rw,
   /dev/console rw,
   /dev/pts/** rw,
+  # joblib/torch shared-memory segments (converter venv)
+  /dev/shm/ rw,
+  /dev/shm/** rwk,
 
   # Bashio (discovery + service run scripts)
   /usr/lib/bashio/** rix,

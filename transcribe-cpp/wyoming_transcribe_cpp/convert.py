@@ -124,8 +124,25 @@ def _run(cmd: list[str], env: dict | None = None) -> None:
     assert proc.stdout is not None
     for line in proc.stdout:
         _LOGGER.info("| %s", line.rstrip())
-    if proc.wait() != 0:
-        raise subprocess.CalledProcessError(proc.returncode, cmd)
+    _check_returncode(proc.wait(), cmd)
+
+
+def _check_returncode(returncode: int, cmd: list) -> None:
+    if returncode == 0:
+        return
+    if returncode < 0:
+        import signal as _signal
+
+        name = _signal.Signals(-returncode).name
+        hint = (
+            " — the kernel OOM-killer usually sends SIGKILL; NeMo-family "
+            "conversion needs several GB of free RAM"
+            if name == "SIGKILL" else ""
+        )
+        raise ConversionFailed(
+            f"converter died with {name}{hint} (cmd: {cmd[1]})"
+        )
+    raise subprocess.CalledProcessError(returncode, cmd)
 
 
 # Debian trixie's Python 3.13 still has wheel gaps in the NeMo dep tree

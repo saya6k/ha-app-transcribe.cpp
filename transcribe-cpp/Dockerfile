@@ -92,10 +92,14 @@ RUN find /usr/local/lib/python3*/dist-packages -name '*.so*' -type f \
 FROM ${BUILD_FROM}
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+# HF_HUB_DISABLE_XET: the xet download backend buffers aggressively and
+# has OOM-killed NeMo weight fetches on small hosts; plain HTTP ranges
+# are slightly slower but memory-flat.
 ARG TRANSCRIBE_REF
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     HF_HUB_DISABLE_TELEMETRY=1 \
+    HF_HUB_DISABLE_XET=1 \
     TRANSCRIBE_LIBRARY=/usr/local/lib/libtranscribe.so \
     TRANSCRIBE_REF=${TRANSCRIBE_REF}
 
