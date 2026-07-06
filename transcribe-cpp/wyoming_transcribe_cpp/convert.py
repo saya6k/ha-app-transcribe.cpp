@@ -1,48 +1,33 @@
 """Custom fine-tuned model conversion: HF checkpoint -> GGUF -> quantized.
 
-torch is never in the image. On first use we create a persistent venv under
-/data/convert-venv with torch-cpu + the upstream converter deps, then run
-the upstream ``convert-<family>.py`` (shipped in the image at
-/usr/local/share/transcribe-cpp/scripts) and ``transcribe-quantize``.
-Conversion is CPU-only and slow by design; progress goes to the app log.
+torch is never in the image. Each converter family gets its own lazy venv
+under /data/convert-venv/<family> because upstream's per-family dep pins
+conflict (e.g. whisper wants transformers==5.6.1, voxtral ==4.57.6). The
+dep list is parsed from the upstream ``scripts/envs/<family>/pyproject.toml``
+shipped in the image — never duplicated here. torch always resolves from
+the CPU wheel index; GPU wheels are out of scope.
 """
 
 from __future__ import annotations
 
-import json
 import logging
+import os
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 from .const import QUANT_ALIASES
 from .models import resolve_quant
+from .weighthash import identity_from_hub, plan_action, write_sidecar
 
 _LOGGER = logging.getLogger(__name__)
 
-SCRIPTS_DIR = Path("/usr/local/share/transcribe-cpp/scripts")
-VENV_DIR = Path("/data/convert-venv")
-TORCH_CPU_INDEX = "https://download.pytorch.org/whl/cpu"
-
-# HF config.json model_type -> upstream converter. Whisper is the supported
-# fine-tune path for v1; other families need per-family deps/validation and
-# are added deliberately, not by default.
-CONVERT_SCRIPTS = {
-    "whisper": "convert-whisper.py",
-}
-
-# Mirrors upstream scripts/envs/whisper/pyproject.toml (torch pulled from the
-# CPU wheel index to stay small and image-free).
-CONVERT_DEPS = [
-    "torch>=2.2",
-    "gguf>=0.10",
-    "huggingface-hub>=0.30",
-    "librosa>=0.10",
-    "safetensors>=0.4",
-    "soundfile>=0.12",
-    "numpy>=1.26",
-    "transformers==5.6.1",
-]
+SHARE_DIR = Path("/usr/local/share/transcribe-cpp")
+SCRIPTS_DIR = SHARE_DIR / "scripts"
+ENVS_DIR = SHARE_DIR / "envs"
+VENV_ROOT = Path("/data/convert-venv")
+CPU_INDEX = "https://download.pytorch.org/whl/cpu"
 
 
 class ConversionUnsupported(Exception):
@@ -54,28 +39,37 @@ def custom_gguf_path(models_dir: str | Path, repo: str, quant: str) -> Path:
     return Path(models_dir) / "custom" / f"{repo.replace('/', '__')}-{quant}.gguf"
 
 
-def pick_convert_script(model_type: str) -> str:
-    script = CONVERT_SCRIPTS.get(model_type)
-    if script is None:
-        raise ConversionUnsupported(
-            f"custom_model architecture {model_type!r} is not supported for "
-            f"on-device conversion yet (supported: {sorted(CONVERT_SCRIPTS)}). "
-            "Convert it on a workstation with upstream transcribe.cpp instead."
-        )
-    return script
+def parse_env_deps(pyproject_text: str) -> list[str]:
+    return tomllib.loads(pyproject_text)["project"]["dependencies"]
 
 
-def _detect_model_type(repo: str, token: str | None) -> str:
-    from huggingface_hub import hf_hub_download
-
-    config_path = hf_hub_download(repo_id=repo, filename="config.json", token=token)
-    model_type = json.loads(Path(config_path).read_text()).get("model_type", "")
-    _LOGGER.info("custom_model %s: model_type=%r", repo, model_type)
-    return model_type
+def env_deps(family: str) -> list[str]:
+    return parse_env_deps((ENVS_DIR / family / "pyproject.toml").read_text())
 
 
-def _venv_python() -> Path:
-    return VENV_DIR / "bin" / "python3"
+def venv_dir(family: str) -> Path:
+    return VENV_ROOT / family
+
+
+def _venv_python(family: str) -> Path:
+    return venv_dir(family) / "bin" / "python3"
+
+
+def pip_commands(python: str | Path, deps: list[str]) -> list[list[str]]:
+    """torch first from the CPU-only index, then the family deps from PyPI.
+
+    Installing torch (and torchaudio when the family needs it) up front
+    from the CPU index keeps pip from ever resolving the CUDA-bundled
+    PyPI linux wheels; the later resolve sees torch already satisfied.
+    """
+    torch_pkgs = ["torch"]
+    if any(d.split()[0].startswith("torchaudio") for d in deps):
+        torch_pkgs.append("torchaudio")
+    base = [str(python), "-m", "pip", "install", "--no-cache-dir"]
+    return [
+        [*base, "--index-url", CPU_INDEX, *torch_pkgs],
+        [*base, "--extra-index-url", CPU_INDEX, *deps],
+    ]
 
 
 def _run(cmd: list[str], **kwargs) -> None:
@@ -83,47 +77,87 @@ def _run(cmd: list[str], **kwargs) -> None:
     subprocess.run([str(c) for c in cmd], check=True, **kwargs)
 
 
-def _ensure_venv() -> None:
-    if _venv_python().exists():
-        return
+def ensure_family_venv(family: str) -> Path:
+    """Create /data/convert-venv/<family> on first use; reuse afterwards."""
+    python = _venv_python(family)
+    if python.exists():
+        return python
     _LOGGER.info(
-        "Bootstrapping conversion venv at %s (torch-cpu — this downloads a "
-        "few hundred MB once and is reused afterwards)", VENV_DIR,
+        "Bootstrapping %s conversion venv at %s (torch-cpu — downloads a "
+        "few hundred MB once, more for NeMo families, and is reused "
+        "afterwards)", family, venv_dir(family),
     )
-    _run([sys.executable, "-m", "venv", str(VENV_DIR)])
-    _run([
-        _venv_python(), "-m", "pip", "install", "--no-cache-dir",
-        "--extra-index-url", TORCH_CPU_INDEX, *CONVERT_DEPS,
-    ])
+    _run([sys.executable, "-m", "venv", str(venv_dir(family))])
+    for cmd in pip_commands(python, env_deps(family)):
+        _run(cmd)
+    return python
+
+
+def converter_cmd(
+    family: str, repo: str, out_path: Path
+) -> list[str]:
+    """Uniform upstream CLI: <script> <repo> <out.gguf> --repo-id <repo>."""
+    from .detect import CONVERT_SCRIPTS
+
+    script = SCRIPTS_DIR / CONVERT_SCRIPTS[family]
+    if family == "gigaam":
+        # gigaam's converter ignores the repo and downloads official
+        # weights keyed by --variant-key; fine-tune import is not a thing
+        # upstream supports. Curated gigaam models come prebuilt instead.
+        raise ConversionUnsupported(
+            "gigaam checkpoints cannot be imported as custom_model "
+            "(upstream converter only fetches official GigaAM weights); "
+            "pick a gigaam model from the curated catalog instead."
+        )
+    return [
+        str(_venv_python(family)), str(script), repo, str(out_path),
+        "--repo-id", repo,
+    ]
 
 
 def ensure_custom_gguf(
     repo: str, quantization: str, models_dir: str | Path, token: str | None
 ) -> Path:
-    """Convert + quantize ``repo`` (HF id) unless already cached."""
+    """Convert + quantize ``repo`` (HF id) unless the cache is current."""
     quant = QUANT_ALIASES.get(quantization.lower())
     if quant is None:
         raise ValueError(f"Unknown quantization: {quantization!r}")
     dest = custom_gguf_path(models_dir, repo, quant)
-    if dest.exists():
-        _LOGGER.info("Custom model cached: %s", dest)
+
+    try:
+        identity = identity_from_hub(repo, token)
+    except Exception as err:
+        if dest.exists():
+            _LOGGER.warning(
+                "HF Hub unreachable (%s) — serving cached %s unverified",
+                err, dest,
+            )
+            return dest
+        raise
+    action, reason = plan_action(dest, identity)
+    _LOGGER.info("custom_model %s: %s", repo, reason)
+    if action == "serve":
         return dest
 
-    script = pick_convert_script(_detect_model_type(repo, token))
-    _ensure_venv()
+    from .detect import detect_family, probe_from_hub
+
+    family = detect_family(probe_from_hub(repo, token))
+    python = ensure_family_venv(family)
 
     dest.parent.mkdir(parents=True, exist_ok=True)
-    f32 = dest.with_name(dest.name.replace(f"-{quant}.gguf", "-F32.gguf"))
-    env = None
-    if token:
-        import os
-
-        env = dict(os.environ, HF_TOKEN=token)
-    if not f32.exists():
-        _LOGGER.info("Converting %s to F32 GGUF (torch-cpu, slow) ...", repo)
-        _run([_venv_python(), SCRIPTS_DIR / script, repo, f32], env=env)
+    ref = dest.with_name(dest.name.replace(f"-{quant}.gguf", "-REF.gguf"))
+    env = dict(os.environ, HF_TOKEN=token) if token else None
+    if not ref.exists():
+        _LOGGER.info(
+            "Converting %s (family %s) to reference GGUF (torch-cpu, "
+            "slow) ...", repo, family,
+        )
+        _run(converter_cmd(family, repo, ref), env=env)
     _LOGGER.info("Quantizing to %s ...", quant)
-    resolved = resolve_quant(quantization, ["F16", "Q8_0", "Q6_K", "Q5_K_M", "Q4_K_M"])
-    _run(["transcribe-quantize", f32, dest, "--quant", resolved])
-    f32.unlink()
+    resolved = resolve_quant(
+        quantization, ["F16", "Q8_0", "Q6_K", "Q5_K_M", "Q4_K_M"]
+    )
+    _run(["transcribe-quantize", ref, dest, "--quant", resolved])
+    ref.unlink()
+    write_sidecar(dest, identity, family=family, quant=quant)
     return dest
