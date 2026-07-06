@@ -1,0 +1,21 @@
+#!/command/with-contenv bashio
+# vim: ft=bash
+# shellcheck shell=bash
+# ==============================================================================
+# Start the Transcribe (cpp) Wyoming service — transcribe.cpp (ggml) via ctypes.
+# ==============================================================================
+
+# GGUF model downloads to the persistent /data volume (not the image).
+export HOME=/data
+mkdir -p /data/models
+
+flags=()
+bashio::config.has_value 'model'        && flags+=('--model'        "$(bashio::config 'model')")
+bashio::config.has_value 'quantization' && flags+=('--quantization' "$(bashio::config 'quantization')")
+bashio::config.has_value 'hf_token'     && flags+=('--hf-token'     "$(bashio::config 'hf_token')")
+bashio::config.true 'debug_logging'     && flags+=('--debug')
+
+# Quote the array so flag values containing spaces stay one argument each.
+exec python3 -m wyoming_transcribe_cpp \
+    --uri 'tcp://0.0.0.0:10380' \
+    "${flags[@]}"
