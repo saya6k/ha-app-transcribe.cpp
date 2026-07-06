@@ -38,15 +38,43 @@ final transcript at end of utterance.
 Set `custom_model` to a HuggingFace repo ID (e.g. `you/whisper-small-ko-ft`).
 On next start the app:
 
-1. installs torch-cpu into a persistent venv under `/data/convert-venv`
-   (one-time, a few hundred MB, slow on purpose — conversion is CPU-only),
-2. converts the checkpoint with upstream's `convert-whisper.py`,
-3. quantizes it with `transcribe-quantize` to your `quantization` choice,
-4. caches the result under `/data/models/custom/` and serves it.
+1. detects the model family from hub metadata (`model_type`, file layout),
+2. installs that family's converter dependencies (torch-cpu, pinned by
+   upstream) into a persistent venv under `/data/convert-venv/<family>`
+   — one-time per family, slow on purpose; conversion is CPU-only,
+3. converts the checkpoint with upstream's matching `convert-*.py`,
+4. quantizes it with `transcribe-quantize` to your `quantization` choice,
+5. caches the result under `/data/models/custom/` and serves it.
 
-Only **Whisper-architecture** checkpoints are supported for on-device
-conversion right now; other architectures fail with a clear log message
-(convert those on a workstation with upstream transcribe.cpp instead).
+A sidecar records the sha256 of every original weight file: restarting
+with the same repo reuses the cache instantly, and a re-uploaded
+checkpoint (changed weights) reconverts automatically. README-only repo
+edits do **not** retrigger conversion.
+
+Conversion runs in a separate unprivileged worker process; the Wyoming
+server talks to it only over an internal unix socket.
+
+### Supported families
+
+Every converter shipped by the pinned transcribe.cpp commit works
+on-device: `whisper` (incl. Breeze), `moonshine`, `moonshine_streaming`,
+`qwen3_asr`, `voxtral`, `voxtral_realtime`, `granite`, `granite_nar`,
+`medasr`, `cohere`, `sensevoice`, `funasr_nano`, and the NeMo families
+`parakeet`, `canary`, `canary_qwen`. Exceptions and caveats:
+
+- **gigaam** — the upstream converter only fetches official GigaAM
+  weights, so fine-tune import is rejected; use the curated catalog.
+- **NeMo families** (parakeet/canary/canary_qwen) build the NeMo
+  toolkit from git: the first conversion downloads **several GB** into
+  `/data/convert-venv/` and can take tens of minutes on aarch64.
+- Converters for whisper/moonshine/voxtral/parakeet/canary need to know
+  the *base* variant of your fine-tune. It is read from the repo's
+  `base_model:` tag (set it in your HF model card) or, failing that,
+  from a catalog slug embedded in the repo name (e.g.
+  `kb-whisper-tiny` → `whisper-tiny`).
+
+Unsupported or undetectable checkpoints fail with a clear log message
+and the app keeps serving the selected catalog `model`.
 
 ## Speaker attribution: this app vs. Voiceprint
 
@@ -161,3 +189,8 @@ catalog table above.
 - [ ] `diarization: true` on a 2-speaker WAV yields `[Speaker N]` tags
 - [ ] `speech_enhancement: true` transcribes a noisy WAV sensibly
 - [ ] One `custom_model` Whisper fine-tune converts and serves (amd64)
+- [ ] One NeMo-family conversion (e.g. a parakeet checkpoint) completes
+      on amd64 (slow; needs several GB free in `/data`)
+- [ ] AppArmor: app starts and serves STT with the profile enforced on
+      HA OS; `ps` shows the server as `transcribe` and the worker as
+      `converter`
