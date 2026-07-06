@@ -3,9 +3,9 @@
 Details per task: see `plan.md`.
 
 ## Phase 0 — Research & Pinning
-- [ ] 0.1 Pin `TRANSCRIBE_REF`, map binding API (batch/streaming) → tasks/notes.md
-- [ ] 0.2 Model catalog snapshot (all families: repo/license/quants/streaming)
-- [ ] 0.3 FastEnhancer license gate → decision in SPEC.md
+- [x] 0.1 Pin `TRANSCRIBE_REF`, map binding API (batch/streaming) → tasks/notes.md
+- [x] 0.2 Model catalog snapshot (all families: repo/license/quants/streaming)
+- [x] 0.3 FastEnhancer license gate → GTCRN fallback (SPEC.md decisions log)
 
 ## Phase 1 — Minimal Working STT
 - [ ] 1.1 Repo scaffold (lint configs, config.yaml, translations, stubs, git init)

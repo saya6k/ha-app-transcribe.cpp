@@ -252,3 +252,13 @@ schema:
   sherpa-onnx).
 - 2026-07-06 — Local builds use Apple Container CLI (no Docker on this
   Mac); CI uses HA builder.
+- 2026-07-06 — FastEnhancer license gate FAILED (C port has no LICENSE);
+  enhancement uses the pre-approved GTCRN/sherpa-onnx fallback, applied at
+  utterance end (partials disabled while enhancement is on).
+- 2026-07-06 — Model dropdown: all 65 catalog entries except cc-by-nc-4.0
+  `canary-1b`; 'other'-licensed models included with license shown in DOCS
+  (weights are user-downloaded at runtime, never redistributed).
+- 2026-07-06 — `TRANSCRIBE_REF=d89ecb75062e8457681c563994675dc60e31db80`;
+  binding is pure-ctypes, loaded via `TRANSCRIBE_LIBRARY` env pointing at
+  our built `libtranscribe.so`; streaming detected at runtime via
+  `Model.capabilities().supports_streaming`.
