@@ -132,6 +132,6 @@ RUN ldconfig \
         /etc/s6-overlay/s6-rc.d/convert-worker/run
 
 # stdlib probe (netcat dropped from the image): send a Wyoming describe,
-# expect the service name back.
+# read the exact data_length payload, expect the service name in it.
 HEALTHCHECK --start-period=10m \
-    CMD python3 -c 'import socket,sys; s=socket.create_connection(("localhost",10380),2); s.sendall(b"""{ "type": "describe" }\n"""); sys.exit(0 if b"transcribe" in s.recv(65536).lower() else 1)'
+    CMD python3 -c 'import json,socket,sys; s=socket.create_connection(("localhost",10380),2); s.settimeout(2); s.sendall(b"""{ "type": "describe" }\n"""); f=s.makefile("rb"); h=json.loads(f.readline()); sys.exit(0 if b"transcribe" in f.read(h.get("data_length",0)).lower() else 1)'
