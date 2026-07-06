@@ -8,10 +8,12 @@ from wyoming_transcribe_cpp import convert
 from wyoming_transcribe_cpp.convert import (
     CPU_INDEX,
     OUTDIR_FAMILIES,
+    PY312_FAMILIES,
     ConversionUnsupported,
     converter_cmd,
     custom_gguf_path,
     ensure_custom_gguf,
+    ensure_family_venv,
     parse_env_deps,
     pip_commands,
     venv_dir,
@@ -104,6 +106,92 @@ class TestVenvDir:
         assert len(dirs) == len(FAMILIES)
         for d in dirs:
             assert str(d).startswith("/data/convert-venv/")
+
+
+class TestEnsureFamilyVenv:
+    @pytest.fixture
+    def sandbox(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(convert, "VENV_ROOT", tmp_path)
+        monkeypatch.setattr(
+            convert, "env_deps", lambda family: ["numpy>=1.26"]
+        )
+        runs = []
+        monkeypatch.setattr(
+            convert, "_run", lambda cmd, **kw: runs.append([str(c) for c in cmd])
+        )
+        return tmp_path, runs
+
+    def make_venv(self, root, family, ready=True):
+        d = root / family / "bin"
+        d.mkdir(parents=True)
+        (d / "python3").touch()
+        if ready:
+            (root / family / ".ready").touch()
+
+    def test_nemo_trio_needs_managed_python312(self):
+        assert PY312_FAMILIES == {"parakeet", "canary", "canary_qwen"}
+
+    def test_ready_venv_is_reused_without_any_run(self, sandbox):
+        root, runs = sandbox
+        self.make_venv(root, "whisper")
+        ensure_family_venv("whisper")
+        assert runs == []
+
+    def test_incomplete_venv_is_rebuilt_from_scratch(self, sandbox):
+        # A crash between venv creation and the last pip step must not
+        # leave a half-venv that later runs silently reuse.
+        root, runs = sandbox
+        self.make_venv(root, "whisper", ready=False)
+        ensure_family_venv("whisper")
+        assert runs, "expected a rebuild"
+        assert (root / "whisper" / ".ready").exists()
+
+    def test_python312_family_bootstraps_off_managed_interpreter(
+        self, sandbox, monkeypatch
+    ):
+        root, runs = sandbox
+        monkeypatch.setattr(
+            convert, "ensure_python312", lambda: Path("/data/x/python3.12")
+        )
+        ensure_family_venv("parakeet")
+        assert runs[0][0] == "/data/x/python3.12"
+
+    def test_default_family_bootstraps_off_system_python(self, sandbox):
+        import sys
+
+        root, runs = sandbox
+        ensure_family_venv("whisper")
+        assert runs[0][0] == sys.executable
+
+
+class TestEnsurePython312:
+    def test_cached_interpreter_skips_download(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(convert, "PY312_DIR", tmp_path)
+        py = tmp_path / "python" / "bin" / "python3.12"
+        py.parent.mkdir(parents=True)
+        py.touch()
+        monkeypatch.setattr(
+            convert, "_download", lambda url, dest: pytest.fail("downloaded")
+        )
+        assert convert.ensure_python312() == py
+
+    def test_checksum_mismatch_raises(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(convert, "PY312_DIR", tmp_path / "p")
+        monkeypatch.setattr(convert, "_machine", lambda: "aarch64")
+
+        def fake_download(url, dest):
+            dest.write_bytes(b"evil")
+
+        monkeypatch.setattr(convert, "_download", fake_download)
+        with pytest.raises(ConversionUnsupported) as err:
+            convert.ensure_python312()
+        assert "checksum" in str(err.value)
+
+    def test_unsupported_arch_raises(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(convert, "PY312_DIR", tmp_path / "p")
+        monkeypatch.setattr(convert, "_machine", lambda: "riscv64")
+        with pytest.raises(ConversionUnsupported):
+            convert.ensure_python312()
 
 
 class TestConverterCmd:

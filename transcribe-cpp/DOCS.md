@@ -64,9 +64,12 @@ on-device: `whisper` (incl. Breeze), `moonshine`, `moonshine_streaming`,
 
 - **gigaam** — the upstream converter only fetches official GigaAM
   weights, so fine-tune import is rejected; use the curated catalog.
-- **NeMo families** (parakeet/canary/canary_qwen) build the NeMo
-  toolkit from git: the first conversion downloads **several GB** into
-  `/data/convert-venv/` and can take tens of minutes on aarch64.
+- **NeMo families** (parakeet/canary/canary_qwen): the first conversion
+  downloads **several GB** into `/data/convert-venv/` and can take tens
+  of minutes on aarch64. These venvs run on a managed CPython 3.12
+  (downloaded once, checksum-pinned) because parts of the NeMo
+  dependency tree ship no Python 3.13 wheels and the image carries no
+  compiler on purpose.
 - Converters for whisper/moonshine/voxtral/parakeet/canary need to know
   the *base* variant of your fine-tune. It is read from the repo's
   `base_model:` tag (set it in your HF model card) or, failing that,

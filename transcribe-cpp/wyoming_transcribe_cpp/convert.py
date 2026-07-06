@@ -128,19 +128,100 @@ def _run(cmd: list[str], env: dict | None = None) -> None:
         raise subprocess.CalledProcessError(proc.returncode, cmd)
 
 
-def ensure_family_venv(family: str) -> Path:
-    """Create /data/convert-venv/<family> on first use; reuse afterwards."""
-    python = _venv_python(family)
+# Debian trixie's Python 3.13 still has wheel gaps in the NeMo dep tree
+# (editdistance ships no cp313 wheels at all) and the image carries no C
+# toolchain to build sdists — NeMo-family venvs therefore run on a
+# managed CPython 3.12 (python-build-standalone, sha256-pinned),
+# downloaded once into /data.
+PY312_FAMILIES = frozenset({"parakeet", "canary", "canary_qwen"})
+PY312_DIR = VENV_ROOT / ".cpython312"
+_PBS_RELEASE = "20260623"
+_PBS_VERSION = "3.12.13"
+_PBS_SHA256 = {
+    "aarch64": "b85154b9c7ca9de3f85f2c9f032d503151db16ef198de86b885fc61890c075ed",
+    "x86_64": "10a452caac7041357805f0c19a60576df53f1ab06d1abfc9200f1f0157cb3bd1",
+}
+
+
+def _machine() -> str:
+    import platform
+
+    return platform.machine()
+
+
+def _download(url: str, dest: Path) -> None:
+    import urllib.request
+
+    urllib.request.urlretrieve(url, dest)  # noqa: S310 — pinned https URL
+
+
+def ensure_python312() -> Path:
+    """Fetch the managed CPython 3.12 into /data on first use."""
+    python = PY312_DIR / "python" / "bin" / "python3.12"
     if python.exists():
         return python
+    machine = _machine()
+    sha = _PBS_SHA256.get(machine)
+    if sha is None:
+        raise ConversionUnsupported(
+            f"no pinned CPython 3.12 build for architecture {machine!r}"
+        )
+    url = (
+        "https://github.com/astral-sh/python-build-standalone/releases/"
+        f"download/{_PBS_RELEASE}/cpython-{_PBS_VERSION}%2B{_PBS_RELEASE}-"
+        f"{machine}-unknown-linux-gnu-install_only_stripped.tar.gz"
+    )
+    _LOGGER.info("Downloading managed CPython %s (%s) ...", _PBS_VERSION, machine)
+    PY312_DIR.mkdir(parents=True, exist_ok=True)
+    tarball = PY312_DIR / "cpython.tar.gz"
+    _download(url, tarball)
+    import hashlib
+    import tarfile
+
+    actual = hashlib.sha256(tarball.read_bytes()).hexdigest()
+    if actual != sha:
+        tarball.unlink()
+        raise ConversionUnsupported(
+            f"managed CPython download failed its checksum ({actual})"
+        )
+    with tarfile.open(tarball) as tf:
+        tf.extractall(PY312_DIR, filter="data")
+    tarball.unlink()
+    return python
+
+
+def _venv_ready_marker(family: str) -> Path:
+    return venv_dir(family) / ".ready"
+
+
+def ensure_family_venv(family: str) -> Path:
+    """Create /data/convert-venv/<family> on first use; reuse afterwards.
+
+    The .ready marker lands only after every install step succeeded — a
+    crash mid-bootstrap leaves no half-venv to be silently reused.
+    """
+    python = _venv_python(family)
+    if _venv_ready_marker(family).exists():
+        return python
+    if venv_dir(family).exists():
+        _LOGGER.warning(
+            "Rebuilding incomplete %s venv at %s", family, venv_dir(family)
+        )
+        shutil.rmtree(venv_dir(family))
     _LOGGER.info(
         "Bootstrapping %s conversion venv at %s (torch-cpu — downloads a "
         "few hundred MB once, more for NeMo families, and is reused "
         "afterwards)", family, venv_dir(family),
     )
-    _run([sys.executable, "-m", "venv", str(venv_dir(family))])
+    base = (
+        ensure_python312() if family in PY312_FAMILIES
+        else Path(sys.executable)
+    )
+    _run([str(base), "-m", "venv", str(venv_dir(family))])
     for cmd in pip_commands(python, env_deps(family)):
         _run(cmd)
+    venv_dir(family).mkdir(parents=True, exist_ok=True)
+    _venv_ready_marker(family).touch()
     return python
 
 
