@@ -106,6 +106,33 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def _resolve_model(args, token):
+    """Return (gguf, model_name, model_repo) for the server to load.
+
+    Conversion runs in the unprivileged convert-worker; this process
+    (transcribe user) only talks to it over the unix socket. A failed
+    conversion must not take the whole addon down — it degrades to the
+    selected catalog model so STT keeps working while the user reads
+    the error in the log.
+    """
+    if args.custom_model:
+        from . import convert
+
+        try:
+            gguf = convert.request_conversion(
+                args.custom_model, args.quantization, args.model_dir, token
+            )
+            return gguf, args.custom_model, args.custom_model
+        except (convert.ConversionFailed, OSError) as err:
+            _LOGGER.error(
+                "custom_model %s could not be converted (%s) — falling "
+                "back to catalog model %s",
+                args.custom_model, err, args.model,
+            )
+    gguf = ensure_gguf(args.model, args.quantization, args.model_dir, token)
+    return gguf, args.model, REGISTRY[args.model].repo
+
+
 async def main() -> None:
     args = _parse_args()
     logging.basicConfig(
@@ -114,20 +141,7 @@ async def main() -> None:
     )
 
     token = args.hf_token or os.environ.get("HF_TOKEN") or None
-    if args.custom_model:
-        # Conversion runs in the unprivileged convert-worker; this process
-        # (transcribe user) only talks to it over the unix socket.
-        from .convert import request_conversion
-
-        gguf = request_conversion(
-            args.custom_model, args.quantization, args.model_dir, token
-        )
-        model_name = args.custom_model
-        model_repo = args.custom_model
-    else:
-        gguf = ensure_gguf(args.model, args.quantization, args.model_dir, token)
-        model_name = args.model
-        model_repo = REGISTRY[args.model].repo
+    gguf, model_name, model_repo = _resolve_model(args, token)
     _LOGGER.info("Model file ready: %s", gguf)
 
     engine = TranscribeEngine(str(gguf))
