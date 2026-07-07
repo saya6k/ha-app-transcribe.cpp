@@ -1,12 +1,12 @@
 #!/command/with-contenv bashio
 # shellcheck shell=bash
 # ==============================================================================
-# Service finish handler.
+# Service finish handler: every service exit halts the container.
 #
-# s6-supervise restarts the service ONLY when finish exits 0.  Bootstrap /
-# non-transient failures exit non-zero -> service stays down (no restart loop).
-# A manual add-on stop sends SIGTERM -> the run script exits cleanly (0) or is
-# killed by signal (256).  Both are transient -> halt the container.
+# Clean exits and signals (manual stop) halt with their code.  Bootstrap /
+# configuration failures (bad custom_model, failed conversion, ...) log the
+# reason and halt with the service's exit code — the add-on stops instead of
+# lingering half-alive or silently retrying; logs stay readable in the HA UI.
 # ==============================================================================
 # shellcheck disable=SC2155
 readonly exit_code_container=$(</run/s6-linux-init-container-results/exitcode)
@@ -27,14 +27,13 @@ elif [[ "${exit_code_service}" -eq 0 ]]; then
   # Clean exit — transient (graceful shutdown).  Halt.
   exec /run/s6/basedir/bin/halt
 else
-  # Non-zero exit — permanent failure (bootstrap, model download, conversion,
-  # etc.).  Exit non-zero so s6-supervise does NOT restart.  Container stays up
-  # so the user can read logs via the HA UI and fix the configuration.
+  # Non-zero exit — configuration/bootstrap failure (bad custom_model,
+  # failed conversion, model download, ...).  Stop the whole add-on.
   bashio::log.error \
-    "transcribe-cpp: permanent failure (exit ${exit_code_service}) —" \
-    "service will not be restarted. Fix the configuration and restart the add-on."
+    "transcribe-cpp: fatal error (exit ${exit_code_service}) —" \
+    "stopping the add-on. Fix the configuration and start it again."
   if [[ "${exit_code_container}" -eq 0 ]]; then
     echo "${exit_code_service}" > /run/s6-linux-init-container-results/exitcode
   fi
-  exit "${exit_code_service}"
+  exec /run/s6/basedir/bin/halt
 fi

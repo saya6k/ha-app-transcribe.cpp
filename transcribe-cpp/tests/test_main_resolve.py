@@ -1,6 +1,8 @@
-"""Bootstrap model resolution: custom_model failures degrade gracefully."""
+"""Bootstrap model resolution: custom_model failures stop the add-on."""
 
 from pathlib import Path
+
+import pytest
 
 from wyoming_transcribe_cpp import __main__ as main_mod
 from wyoming_transcribe_cpp import convert
@@ -30,32 +32,26 @@ class TestResolveModel:
         assert name == "me/ft"
         assert gguf.name == "me__ft-Q4_K_M.gguf"
 
-    def test_conversion_failure_falls_back_to_catalog(self, monkeypatch, caplog):
+    def test_conversion_failure_logs_and_stops(self, monkeypatch, caplog):
+        # Policy: a broken custom_model is a configuration error — the
+        # add-on stops (s6 finish halts the container) rather than
+        # silently serving a model the user did not select.
         args = _parse_args(["--custom-model", "me/ft"])
 
         def boom(*a, **kw):
             raise ConversionFailed("converter died with SIGKILL")
 
         monkeypatch.setattr(convert, "request_conversion", boom)
-        monkeypatch.setattr(
-            main_mod, "ensure_gguf",
-            lambda m, q, d, t: Path(f"/data/models/{m}.gguf"),
-        )
-        with caplog.at_level("ERROR"):
-            gguf, name, repo = _resolve_model(args, None)
-        assert name == DEFAULT_MODEL
-        assert any("falling back" in r.message for r in caplog.records)
+        with caplog.at_level("ERROR"), pytest.raises(ConversionFailed):
+            _resolve_model(args, None)
+        assert any("stopping" in r.message for r in caplog.records)
 
-    def test_worker_socket_outage_also_falls_back(self, monkeypatch):
+    def test_worker_socket_outage_also_stops(self, monkeypatch):
         args = _parse_args(["--custom-model", "me/ft"])
 
         def boom(*a, **kw):
             raise OSError("connect: no such file or directory")
 
         monkeypatch.setattr(convert, "request_conversion", boom)
-        monkeypatch.setattr(
-            main_mod, "ensure_gguf",
-            lambda m, q, d, t: Path(f"/data/models/{m}.gguf"),
-        )
-        gguf, name, repo = _resolve_model(args, None)
-        assert name == DEFAULT_MODEL
+        with pytest.raises(OSError):
+            _resolve_model(args, None)

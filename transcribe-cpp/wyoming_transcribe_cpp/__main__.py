@@ -111,9 +111,10 @@ def _resolve_model(args, token):
 
     Conversion runs in the unprivileged convert-worker; this process
     (transcribe user) only talks to it over the unix socket. A failed
-    conversion must not take the whole addon down — it degrades to the
-    selected catalog model so STT keeps working while the user reads
-    the error in the log.
+    conversion is a configuration error: log the reason and let the
+    exception stop the add-on cleanly (the s6 finish script halts the
+    container), instead of silently serving a model the user did not
+    ask for.
     """
     if args.custom_model:
         from . import convert
@@ -122,13 +123,15 @@ def _resolve_model(args, token):
             gguf = convert.request_conversion(
                 args.custom_model, args.quantization, args.model_dir, token
             )
-            return gguf, args.custom_model, args.custom_model
         except (convert.ConversionFailed, OSError) as err:
             _LOGGER.error(
-                "custom_model %s could not be converted (%s) — falling "
-                "back to catalog model %s",
-                args.custom_model, err, args.model,
+                "custom_model %s could not be converted: %s — stopping. "
+                "Fix custom_model (or clear it to use the catalog model) "
+                "and start the add-on again.",
+                args.custom_model, err,
             )
+            raise
+        return gguf, args.custom_model, args.custom_model
     gguf = ensure_gguf(args.model, args.quantization, args.model_dir, token)
     return gguf, args.model, REGISTRY[args.model].repo
 

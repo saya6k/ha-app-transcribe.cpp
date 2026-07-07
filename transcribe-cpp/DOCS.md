@@ -76,8 +76,9 @@ on-device: `whisper` (incl. Breeze), `moonshine`, `moonshine_streaming`,
   from a catalog slug embedded in the repo name (e.g.
   `kb-whisper-tiny` → `whisper-tiny`).
 
-Unsupported or undetectable checkpoints fail with a clear log message
-and the app keeps serving the selected catalog `model`.
+Unsupported or undetectable checkpoints stop the add-on with a clear
+log message — fix `custom_model` (or clear it to use the catalog
+`model`) and start the add-on again.
 
 ## Speaker attribution: this app vs. Voiceprint
 
