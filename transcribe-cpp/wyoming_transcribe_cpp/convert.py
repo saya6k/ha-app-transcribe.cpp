@@ -300,11 +300,12 @@ def converter_cmd(
             "(e.g. base_model:nvidia/parakeet-tdt-0.6b-v2) or include the "
             "base catalog slug in the repo name."
         )
-    cmd = [
-        str(_venv_python(family)),
-        str(SCRIPTS_DIR / CONVERT_SCRIPTS[family]),
-        model_spec or repo,
-    ]
+    cmd = [str(_venv_python(family))]
+    if family in SLUGDIR_FAMILIES:
+        # Force upstream's low-memory direct-archive load path — see
+        # nemo_driver docstring.
+        cmd.append(str(Path(__file__).parent / "nemo_driver.py"))
+    cmd += [str(SCRIPTS_DIR / CONVERT_SCRIPTS[family]), model_spec or repo]
     if family in OUTDIR_FAMILIES:
         cmd += ["--repo-id", repo, "--outdir", str(_outdir_for(out_path))]
     elif family in SLUGDIR_FAMILIES:

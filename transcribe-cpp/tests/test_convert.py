@@ -238,9 +238,19 @@ class TestConverterCmd:
             "parakeet", "o/m", self.OUT, variant="parakeet-tdt-0.6b-v2"
         )
         assert "--variant" not in cmd
-        out = cmd[2 + 1]  # python, script, repo, <out>
+        out = cmd[cmd.index("o/m") + 1]
         assert out == str(self.OUT.parent / "parakeet-tdt-0.6b-v2" / self.OUT.name)
         assert cmd[cmd.index("--repo-id") + 1] == "o/m"
+
+    def test_parakeet_runs_through_the_direct_load_driver(self):
+        # restore_from's full instantiation peaks ~2x the direct archive
+        # read and OOM-dies on 8 GB hosts before the built-in fallback
+        # can run — the driver forces upstream's prefer_direct_load.
+        cmd = converter_cmd(
+            "parakeet", "o/m", self.OUT, variant="parakeet-tdt-0.6b-v2"
+        )
+        assert cmd[1].endswith("nemo_driver.py")
+        assert cmd[2].endswith("convert-parakeet.py")
 
     def test_canary_variant_travels_via_repo_id(self):
         # convert-canary.py derives the variant from slug_from_repo_id.
@@ -265,7 +275,10 @@ class TestConverterCmd:
             variant="parakeet-tdt-0.6b-v2",
             model_spec="/data/cache/model.nemo",
         )
-        assert cmd[2] == "/data/cache/model.nemo"
+        script_idx = next(
+            i for i, c in enumerate(cmd) if c.endswith("convert-parakeet.py")
+        )
+        assert cmd[script_idx + 1] == "/data/cache/model.nemo"
         assert "o/m" in cmd  # --repo-id still names the fine-tune
 
 
@@ -286,7 +299,7 @@ class TestConverterCmd:
     )
     def test_every_family_routes_to_its_script(self, family):
         cmd = converter_cmd(family, "o/m", self.OUT, variant="some-variant")
-        assert cmd[1].endswith(CONVERT_SCRIPTS[family])
+        assert any(c.endswith(CONVERT_SCRIPTS[family]) for c in cmd[1:3])
         assert cmd[0].startswith(str(venv_dir(family)))
 
 
