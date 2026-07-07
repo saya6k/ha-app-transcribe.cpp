@@ -124,7 +124,7 @@ jobs:
         with:
           python-version: "3.13"
       - name: Install test deps
-        run: pip install pytest numpy "wyoming>=1.9,<2"
+        run: pip install pytest numpy pyyaml "wyoming>=1.9,<2"
       - name: Run unit tests
         working-directory: transcribe-cpp
         run: python -m pytest tests/ -q
