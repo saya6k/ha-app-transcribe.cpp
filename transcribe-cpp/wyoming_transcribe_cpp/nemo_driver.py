@@ -25,8 +25,13 @@ from pathlib import Path
 
 def _streaming_load_nemo_archive(nemo_path):
     """Drop-in for upstream _load_nemo_archive_directly, minus the
-    whole-checkpoint bytes copy."""
+    whole-checkpoint bytes copy — and with mmap-backed tensors, so the
+    state dict never has to be fully resident: the GGUF writer pages
+    tensors in one at a time and the kernel reclaims them behind it."""
+    import os
+    import shutil
     import tarfile
+    import tempfile
 
     import torch
     import yaml
@@ -43,10 +48,29 @@ def _streaming_load_nemo_archive(nemo_path):
             )
 
         cfg = yaml.safe_load(tf.extractfile(_member("model_config.yaml")).read())
-        sd = torch.load(
-            tf.extractfile(_member("model_weights.ckpt")),
-            map_location="cpu", weights_only=False,
+
+        # mmap needs a real file: extract the checkpoint next to the
+        # archive (same converter-owned filesystem), load, then unlink —
+        # the mapping keeps the inode alive for the process lifetime.
+        ckpt = tf.extractfile(_member("model_weights.ckpt"))
+        tmp = tempfile.NamedTemporaryFile(
+            dir=os.path.dirname(nemo_path), suffix=".ckpt", delete=False
         )
+        try:
+            with tmp:
+                shutil.copyfileobj(ckpt, tmp, length=16 * 1024 * 1024)
+            try:
+                sd = torch.load(
+                    tmp.name, map_location="cpu",
+                    weights_only=False, mmap=True,
+                )
+            except (TypeError, RuntimeError):
+                # legacy (non-zip) checkpoints can't mmap — stream them
+                with open(tmp.name, "rb") as f:
+                    sd = torch.load(f, map_location="cpu", weights_only=False)
+        finally:
+            os.unlink(tmp.name)
+
         sp_proto = None
         for n in names:
             if n.endswith("_tokenizer.model") or n.endswith("/tokenizer.model"):

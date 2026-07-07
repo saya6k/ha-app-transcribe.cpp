@@ -67,7 +67,14 @@ class TestNemoDriver:
         import types
 
         fake_torch = types.ModuleType("torch")
-        fake_torch.load = lambda f, **kw: pickle.load(f)
+
+        def fake_load(f, **kw):
+            if isinstance(f, str):
+                with open(f, "rb") as fh:
+                    return pickle.load(fh)
+            return pickle.load(f)
+
+        fake_torch.load = fake_load
         monkeypatch.setitem(sys.modules, "torch", fake_torch)
 
         nemo = tmp_path / "model.nemo"
