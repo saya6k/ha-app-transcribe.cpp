@@ -269,12 +269,17 @@ def _outdir_for(out_path: Path) -> Path:
     return out_path.parent / (out_path.stem + ".outdir")
 
 
+def _pick_nemo_file(files: list[str]) -> str | None:
+    return next((f for f in sorted(files) if f.endswith(".nemo")), None)
+
+
 def converter_cmd(
     family: str,
     repo: str,
     out_path: Path,
     revision: str | None = None,
     variant: str | None = None,
+    model_spec: str | None = None,
 ) -> list[str]:
     """Upstream CLI: <script> <repo> [<out.gguf>] --repo-id <repo> [...]"""
     from .detect import CONVERT_SCRIPTS
@@ -295,7 +300,11 @@ def converter_cmd(
             "(e.g. base_model:nvidia/parakeet-tdt-0.6b-v2) or include the "
             "base catalog slug in the repo name."
         )
-    cmd = [str(_venv_python(family)), str(SCRIPTS_DIR / CONVERT_SCRIPTS[family]), repo]
+    cmd = [
+        str(_venv_python(family)),
+        str(SCRIPTS_DIR / CONVERT_SCRIPTS[family]),
+        model_spec or repo,
+    ]
     if family in OUTDIR_FAMILIES:
         cmd += ["--repo-id", repo, "--outdir", str(_outdir_for(out_path))]
     elif family in SLUGDIR_FAMILIES:
@@ -348,6 +357,22 @@ def ensure_custom_gguf(
         _LOGGER.info("Using base variant %r for %s", variant, repo)
     ensure_family_venv(family)
 
+    # NeMo's from_pretrained only recognizes conventionally-named .nemo
+    # files and caches them in its own throwaway directory (re-downloaded
+    # on every retry). Fetch the archive through the standard hub cache
+    # ourselves and hand the converter a local path instead.
+    model_spec = None
+    if family in SLUGDIR_FAMILIES | _REPOID_VARIANT_FAMILIES:
+        nemo_file = _pick_nemo_file(probe.files)
+        if nemo_file:
+            from huggingface_hub import hf_hub_download
+
+            _LOGGER.info("Fetching %s from %s ...", nemo_file, repo)
+            model_spec = hf_hub_download(
+                repo, nemo_file,
+                revision=identity.revision or None, token=token,
+            )
+
     dest.parent.mkdir(parents=True, exist_ok=True)
     ref = dest.with_name(dest.name.replace(f"-{quant}.gguf", "-REF.gguf"))
     env = dict(os.environ, HF_TOKEN=token) if token else None
@@ -359,7 +384,9 @@ def ensure_custom_gguf(
         if family in SLUGDIR_FAMILIES and variant:
             (ref.parent / variant).mkdir(parents=True, exist_ok=True)
         _run(
-            converter_cmd(family, repo, ref, identity.revision, variant),
+            converter_cmd(
+                family, repo, ref, identity.revision, variant, model_spec
+            ),
             env=env,
         )
         if family in OUTDIR_FAMILIES:

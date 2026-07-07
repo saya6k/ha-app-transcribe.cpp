@@ -257,6 +257,18 @@ class TestConverterCmd:
                 converter_cmd(family, "o/m", self.OUT, variant=None)
             assert "base_model" in str(err.value)
 
+    def test_local_model_spec_replaces_repo_positional(self):
+        # NeMo's from_pretrained only recognizes conventionally-named
+        # .nemo files; we pre-download the archive and hand over a path.
+        cmd = converter_cmd(
+            "parakeet", "o/m", self.OUT,
+            variant="parakeet-tdt-0.6b-v2",
+            model_spec="/data/cache/model.nemo",
+        )
+        assert cmd[2] == "/data/cache/model.nemo"
+        assert "o/m" in cmd  # --repo-id still names the fine-tune
+
+
     def test_outdir_families_use_outdir_instead_of_positional(self):
         cmd = converter_cmd("granite_nar", "o/m", self.OUT, revision="r1")
         assert str(self.OUT) not in cmd
@@ -276,6 +288,15 @@ class TestConverterCmd:
         cmd = converter_cmd(family, "o/m", self.OUT, variant="some-variant")
         assert cmd[1].endswith(CONVERT_SCRIPTS[family])
         assert cmd[0].startswith(str(venv_dir(family)))
+
+
+class TestPickNemoFile:
+    def test_single_nemo_file_is_picked(self):
+        files = ["README.md", "model.nemo", "showcase_result.json"]
+        assert convert._pick_nemo_file(files) == "model.nemo"
+
+    def test_no_nemo_file_yields_none(self):
+        assert convert._pick_nemo_file(["config.json", "model.safetensors"]) is None
 
 
 IDENT = WeightIdentity(
