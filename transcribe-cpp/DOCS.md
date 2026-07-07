@@ -27,9 +27,8 @@ final transcript at end of utterance.
 | `model` | `whisper-large-v3-turbo` | ASR model from the transcribe.cpp GGUF catalog (table below) |
 | `quantization` | `q4_k_m` | GGUF weight precision, smallest → largest: `q4_k_m` → `f16`. If the model doesn't publish the chosen one, the nearest larger is used |
 | `custom_model` | `''` | HF repo ID of your own fine-tune to convert on-device (see below) — overrides `model` |
-| `speech_enhancement` | `false` | GTCRN denoise before decoding (noisy rooms; disables live partials) |
-| `diarization` | `false` | Tag the final transcript with `[Speaker N]` (disables live partials) |
-| `max_speakers` | unset | Diarization hint: expected number of speakers (unset = auto) |
+| `speech_enhancement` | `false` | FastEnhancer denoise before decoding (noisy rooms; live partials keep working) |
+| `fastenhancer_size` | unset | Enhancement model size `tiny`–`large` (unset = `base`); hidden under unused optional options |
 | `hf_token` | `''` | HuggingFace token for gated repos / rate limits |
 | `log_level` | `info` | Log verbosity: trace–fatal |
 
@@ -80,19 +79,14 @@ Unsupported or undetectable checkpoints stop the add-on with a clear
 log message — fix `custom_model` (or clear it to use the catalog
 `model`) and start the add-on again.
 
-## Speaker attribution: this app vs. Voiceprint
+## Speaker attribution
 
-For **Assist voice commands** (one speaker per utterance), built-in
-diarization only yields anonymous `[Speaker 1]` labels. Chaining the
-[Voiceprint](https://github.com/saya6k/ha-app-voiceprint) app in front gives
-you *named*, enrolled speakers instead — that is the recommended setup:
+For *named* speaker attribution on Assist voice commands, chain the
+[Voiceprint](https://github.com/saya6k/ha-app-voiceprint) app in front:
 
 ```text
 HA Assist ──► Voiceprint (:10350) ──► Transcribe.cpp (:10380)
 ```
-
-Enable this app's `diarization` for **multi-speaker recordings** (meetings,
-long-form audio) where per-utterance verification can't help.
 
 ## Model catalog
 
@@ -176,10 +170,8 @@ excluded from this list.
 |---|---|---|
 | [transcribe.cpp](https://github.com/handy-computer/transcribe.cpp) (+ vendored ggml, miniz) | MIT | ASR engine, GGUF conversion/quantization tools |
 | [wyoming](https://github.com/rhasspy/wyoming) | MIT | Protocol server |
-| [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) | Apache-2.0 | Speech enhancement + diarization runtime |
-| [GTCRN](https://github.com/Xiaobin-Rong/gtcrn) (`gtcrn_simple.onnx`) | MIT | Speech enhancement model |
-| [pyannote segmentation-3.0](https://huggingface.co/pyannote/segmentation-3.0) (ONNX export) | MIT | Diarization segmentation model |
-| [3D-Speaker CAM++](https://github.com/modelscope/3D-Speaker) | Apache-2.0 | Diarization speaker embedding model |
+| [onnxruntime](https://github.com/microsoft/onnxruntime) | MIT | Speech enhancement runtime |
+| [FastEnhancer](https://github.com/aask1357/fastenhancer) (`fastenhancer_*.onnx`) | MIT | Speech enhancement model |
 
 ASR model weights are downloaded by the user at runtime from the
 `handy-computer` HuggingFace org; each model's license is listed in the
@@ -190,8 +182,8 @@ catalog table above.
 - [ ] Wyoming `describe` healthcheck answers on :10380
 - [ ] Assist end-to-end phrase with the default model (batch)
 - [ ] Live partials visible with a streaming model (e.g. `moonshine-streaming-tiny`)
-- [ ] `diarization: true` on a 2-speaker WAV yields `[Speaker N]` tags
 - [ ] `speech_enhancement: true` transcribes a noisy WAV sensibly
+- [ ] `speech_enhancement: true` + a streaming model still shows live partials
 - [ ] One `custom_model` Whisper fine-tune converts and serves (amd64)
 - [ ] One NeMo-family conversion (e.g. a parakeet checkpoint) completes
       on amd64 (slow; needs several GB free in `/data`)

@@ -9,9 +9,9 @@
 - The Python binding is pure ctypes; it finds our built `libtranscribe.so`
   via the `TRANSCRIBE_LIBRARY` env var (set in the runtime stage). Binding
   attributes `capabilities`, `arch`, `variant`, `backend` are *properties*.
-- Streaming vs batch is decided per session by `streaming.decode_mode()`:
-  enhancement (whole-utterance GTCRN) and diarization (needs Result segment
-  timestamps) both force batch.
+- Streaming vs batch follows `engine.supports_streaming` directly.
+  Enhancement (FastEnhancer) is frame-based and runs in both modes —
+  per-chunk in stream mode, whole-utterance in batch.
 - Local builds/tests on the maintainer's Mac use Apple Container CLI
   (`container build` / `container run`), not Docker. bashio reads options
   from the Supervisor API, so local runs bypass s6 with

@@ -1,22 +1,6 @@
-"""Unit tests for streaming transcript delta computation and decode mode."""
+"""Unit tests for streaming transcript delta computation."""
 
-from wyoming_transcribe_cpp.streaming import decode_mode, text_delta
-
-
-class TestDecodeMode:
-    def test_streaming_model_streams_by_default(self):
-        assert decode_mode(True, enhancement=False, diarization=False) == "stream"
-
-    def test_batch_model_always_batches(self):
-        assert decode_mode(False, enhancement=False, diarization=False) == "batch"
-
-    def test_enhancement_forces_batch(self):
-        # GTCRN denoises the whole utterance — incompatible with partials.
-        assert decode_mode(True, enhancement=True, diarization=False) == "batch"
-
-    def test_diarization_forces_batch(self):
-        # Tag rendering needs the final Result segments (timestamps).
-        assert decode_mode(True, enhancement=False, diarization=True) == "batch"
+from wyoming_transcribe_cpp.streaming import text_delta
 
 
 def test_growing_hypothesis_emits_only_the_new_tail():

@@ -23,19 +23,14 @@ configuration:
   speech_enhancement:
     name: 음성 향상
     description: >-
-      GTCRN으로 각 발화의 잡음을 제거한 뒤 전사합니다. 시끄러운 환경에서
-      유용하며, 지연이 약간 늘고 실시간 부분 전사가 비활성화됩니다.
-  diarization:
-    name: 화자 분리
+      FastEnhancer로 잡음을 제거한 뒤 전사합니다. 시끄러운 환경에서
+      유용합니다. 프레임 단위로 처리하므로 실시간 부분 전사도 그대로
+      유지됩니다.
+  fastenhancer_size:
+    name: FastEnhancer 모델 크기
     description: >-
-      다화자 오디오에 [Speaker N] 태그를 붙입니다. Assist 음성 명령에는
-      Voiceprint 애드온을 앞단에 체이닝하면 등록된 이름으로 화자를 태그할 수
-      있습니다. 실시간 부분 전사가 비활성화됩니다.
-  max_speakers:
-    name: 최대 화자 수
-    description: >-
-      선택적 화자 분리 힌트 — 예상되는 화자 수입니다. 비워두면 자동으로
-      클러스터링합니다.
+      음성 향상 모델의 크기입니다. 클수록 잡음 제거 품질이 좋지만 CPU를 더
+      씁니다. 비워두면 base를 사용합니다.
   hf_token:
     name: HuggingFace 토큰
     description: >-

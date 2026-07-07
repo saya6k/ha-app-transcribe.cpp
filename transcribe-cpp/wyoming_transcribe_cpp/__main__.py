@@ -14,6 +14,8 @@ from wyoming.server import AsyncServer
 
 from . import __version__
 from .const import MODELS_DIR, PORT, QUANT_ALIASES
+from .enhance import DEFAULT_SIZE as FASTENHANCER_DEFAULT_SIZE
+from .enhance import SIZES as FASTENHANCER_SIZES
 from .engine import TranscribeEngine
 from .handler import TranscribeHandler
 from .models import DEFAULT_MODEL, REGISTRY, ensure_gguf
@@ -88,15 +90,11 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--speech-enhancement", action="store_true",
-        help="Denoise each utterance with GTCRN before decoding",
+        help="Denoise the audio with FastEnhancer before decoding",
     )
     parser.add_argument(
-        "--diarization", action="store_true",
-        help="Tag the final transcript with [Speaker N] labels",
-    )
-    parser.add_argument(
-        "--max-speakers", type=int, default=0,
-        help="Diarization cluster count hint (0 = auto)",
+        "--fastenhancer-size", default=None, choices=sorted(FASTENHANCER_SIZES),
+        help="FastEnhancer model size (default: base)",
     )
     parser.add_argument("--hf-token", default="")
     parser.add_argument(
@@ -156,34 +154,28 @@ async def main() -> None:
         if args.speech_enhancement:
             from .enhance import Enhancer
 
-            _LOGGER.info("Speech enhancement enabled — loading GTCRN ...")
-            enhancer = Enhancer(args.model_dir)
-
-        diarizer = None
-        if args.diarization:
-            from .diarize import Diarizer
-
-            _LOGGER.info("Diarization enabled — loading sherpa-onnx models ...")
-            diarizer = Diarizer(args.model_dir, max_speakers=args.max_speakers)
-
-        from .streaming import decode_mode
-
-        streaming = (
-            decode_mode(
-                engine.supports_streaming,
-                enhancement=enhancer is not None,
-                diarization=diarizer is not None,
+            size = args.fastenhancer_size or FASTENHANCER_DEFAULT_SIZE
+            _LOGGER.info(
+                "Speech enhancement enabled — loading FastEnhancer (%s) ...", size
             )
-            == "stream"
+            enhancer = Enhancer(args.model_dir, size)
+            if engine.sample_rate != enhancer.sample_rate:
+                _LOGGER.warning(
+                    "Model runs at %d Hz but FastEnhancer needs %d Hz — "
+                    "disabling speech enhancement",
+                    engine.sample_rate, enhancer.sample_rate,
+                )
+                enhancer = None
+
+        wyoming_info = _build_info(
+            model_name, model_repo, engine, engine.supports_streaming
         )
-        wyoming_info = _build_info(model_name, model_repo, engine, streaming)
         server = AsyncServer.from_uri(args.uri)
         _LOGGER.info("Starting server on %s", args.uri)
         server_task = asyncio.create_task(
             server.run(
                 partial(
-                    TranscribeHandler, wyoming_info, args, engine,
-                    enhancer, diarizer,
+                    TranscribeHandler, wyoming_info, args, engine, enhancer,
                 )
             )
         )

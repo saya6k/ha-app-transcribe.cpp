@@ -13,11 +13,10 @@ flags=()
 bashio::config.has_value 'model'         && flags+=('--model'         "$(bashio::config 'model')")
 bashio::config.has_value 'quantization'  && flags+=('--quantization'  "$(bashio::config 'quantization')")
 bashio::config.has_value 'custom_model'  && flags+=('--custom-model'  "$(bashio::config 'custom_model')")
-bashio::config.has_value 'max_speakers'  && flags+=('--max-speakers'  "$(bashio::config 'max_speakers')")
+bashio::config.has_value 'fastenhancer_size' && flags+=('--fastenhancer-size' "$(bashio::config 'fastenhancer_size')")
 bashio::config.has_value 'hf_token'      && flags+=('--hf-token'      "$(bashio::config 'hf_token')")
 bashio::config.has_value 'log_level'     && flags+=('--log-level'     "$(bashio::config 'log_level')")
 bashio::config.true 'speech_enhancement' && flags+=('--speech-enhancement')
-bashio::config.true 'diarization'        && flags+=('--diarization')
 
 # Quote the array so flag values containing spaces stay one argument each.
 # The server runs unprivileged; conversion happens in the converter-user

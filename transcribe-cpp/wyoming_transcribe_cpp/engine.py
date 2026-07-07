@@ -34,7 +34,6 @@ class TranscribeEngine:
         self.sample_rate: int = caps.native_sample_rate
         self.languages: tuple[str, ...] = caps.languages
         self.supports_streaming: bool = caps.supports_streaming
-        self._timestamp_kind: str = caps.max_timestamp_kind
         if n_threads is None:
             n_threads = min(os.cpu_count() or 4, 16)
         self._session = self._model.session(n_threads=n_threads)
@@ -49,30 +48,6 @@ class TranscribeEngine:
         """Batch-decode one utterance (float32 mono at ``sample_rate``)."""
         result = self._session.run(pcm, language=self._normalize_language(language))
         return result.text.strip()
-
-    def transcribe_result(
-        self, pcm: "np.ndarray", language: str | None
-    ) -> tuple[str, list[tuple[float, float, str]]]:
-        """Batch-decode returning text plus (start_s, end_s, text) segments.
-
-        Models without timestamp support yield a single zero-span segment;
-        diarization tag rendering falls back to the dominant speaker then.
-        """
-        timestamps = "segment" if self._timestamp_kind != "none" else "none"
-        result = self._session.run(
-            pcm,
-            language=self._normalize_language(language),
-            timestamps=timestamps,
-        )
-        text = result.text.strip()
-        segments = [
-            (s.t0_ms / 1000.0, s.t1_ms / 1000.0, s.text.strip())
-            for s in result.segments
-            if s.text.strip()
-        ]
-        if not segments and text:
-            segments = [(0.0, 0.0, text)]
-        return text, segments
 
     def create_stream(self, language: str | None) -> "TranscribeStream":
         """Begin a streaming decode (requires ``supports_streaming``)."""

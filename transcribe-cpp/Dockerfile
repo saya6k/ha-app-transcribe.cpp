@@ -74,14 +74,14 @@ RUN mkdir -p /usr/local/share/transcribe-cpp/scripts \
             "/usr/local/share/transcribe-cpp/envs/$(basename "${env}")/pyproject.toml"; \
     done
 
-RUN pip3 install --no-cache-dir --no-compile "wyoming>=1.9,<2" "huggingface_hub" "numpy" "sherpa-onnx" \
+RUN pip3 install --no-cache-dir --no-compile "wyoming>=1.9,<2" "huggingface_hub" "numpy" "onnxruntime" \
     && pip3 install --no-cache-dir --no-compile --no-deps /src/bindings/python
 COPY pyproject.toml /usr/src/app/
 COPY wyoming_transcribe_cpp/ /usr/src/app/wyoming_transcribe_cpp/
 RUN pip3 install --no-cache-dir --no-compile --no-deps /usr/src/app
 
 # Slim the /usr/local payload before the runtime COPY: strip native
-# wheels (sherpa-onnx alone carries tens of MB of symbols) and drop
+# wheels (onnxruntime alone carries tens of MB of symbols) and drop
 # bundled test suites/bytecode.
 RUN find /usr/local/lib/python3*/dist-packages -name '*.so*' -type f \
         -exec strip --strip-unneeded {} + \

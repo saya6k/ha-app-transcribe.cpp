@@ -1,71 +1,117 @@
-"""Speech enhancement via sherpa-onnx GTCRN (opt-in).
+"""Speech enhancement via FastEnhancer (opt-in).
 
-GTCRN (MIT) is a ~24k-parameter denoiser running on onnxruntime CPU; the
-model is downloaded to /data/models/enhance/ on first enable, never baked
-into the image. It denoises the whole buffered utterance at AudioStop
-(decode_mode forces batch while enhancement is on).
+FastEnhancer (MIT, https://github.com/aask1357/fastenhancer) is a streaming
+neural denoiser running on onnxruntime CPU; the selected size's ONNX model
+(22k-1.1M parameters, 16 kHz, DNS-Challenge trained) is downloaded to
+/data/models/enhance/ on first enable, never baked into the image.
+
+The exported model is stateful: each call takes one hop of samples plus the
+cache_in_* tensors and returns one enhanced hop plus updated caches, so it
+denoises frame-by-frame with (n_fft - hop) samples of algorithmic latency
+(16-26 ms). Streaming decodes stay streaming with enhancement on.
 """
 
 from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING
 from urllib.request import urlretrieve
 
-if TYPE_CHECKING:
-    import numpy as np
+import numpy as np
 
 _LOGGER = logging.getLogger(__name__)
 
-GTCRN_URL = (
-    "https://github.com/k2-fsa/sherpa-onnx/releases/download/"
-    "speech-enhancement-models/gtcrn_simple.onnx"
+SAMPLE_RATE = 16_000
+_N_FFT = 512  # all sizes; only the hop differs (read from the model input)
+
+_RELEASE_URL = (
+    "https://github.com/aask1357/fastenhancer/releases/download/onnx-dns-v1.0.0"
 )
+SIZES = {
+    "tiny": "t",
+    "base": "b",
+    "small": "s",
+    "medium": "m",
+    "large": "l",
+}
+DEFAULT_SIZE = "base"
 
 
-def ensure_enhance_model(models_dir: str | Path) -> Path:
-    dest = Path(models_dir) / "enhance" / "gtcrn_simple.onnx"
+def ensure_enhance_model(models_dir: str | Path, size: str) -> Path:
+    name = f"fastenhancer_{SIZES[size]}.onnx"
+    dest = Path(models_dir) / "enhance" / name
     if not dest.exists():
         dest.parent.mkdir(parents=True, exist_ok=True)
         tmp = dest.with_suffix(".onnx.part")
-        _LOGGER.info("Downloading GTCRN model ...")
-        urlretrieve(GTCRN_URL, tmp)  # noqa: S310 - fixed https URL
+        _LOGGER.info("Downloading FastEnhancer (%s) model ...", size)
+        urlretrieve(f"{_RELEASE_URL}/{name}", tmp)  # noqa: S310 - fixed https URL
         tmp.rename(dest)
     return dest
 
 
-class Enhancer:
-    """GTCRN denoiser over one buffered utterance."""
+class EnhanceStream:
+    """Frame-by-frame denoising state for one utterance."""
 
-    def __init__(self, models_dir: str | Path) -> None:
-        import sherpa_onnx
+    def __init__(self, session) -> None:
+        self._session = session
+        self.hop: int = session.get_inputs()[0].shape[1]
+        self._state = {
+            i.name: np.zeros(i.shape, dtype=np.float32)
+            for i in session.get_inputs()
+            if i.name.startswith("cache_in_")
+        }
+        self._buf = np.empty(0, dtype=np.float32)
 
-        model = ensure_enhance_model(models_dir)
-        config = sherpa_onnx.OfflineSpeechDenoiserConfig(
-            model=sherpa_onnx.OfflineSpeechDenoiserModelConfig(
-                gtcrn=sherpa_onnx.OfflineSpeechDenoiserGtcrnModelConfig(
-                    model=str(model)
-                ),
-            )
+    def _run(self, frames: np.ndarray) -> np.ndarray:
+        """Denoise hop-aligned samples (n*hop) frame by frame."""
+        out = []
+        for idx in range(0, frames.size, self.hop):
+            self._state["wav_in"] = frames[np.newaxis, idx : idx + self.hop]
+            result = self._session.run(None, self._state)
+            out.append(result[0][0])
+            for j, cache in enumerate(result[1:]):
+                self._state[f"cache_in_{j}"] = cache
+        return np.concatenate(out) if out else np.empty(0, dtype=np.float32)
+
+    def process(self, pcm: np.ndarray) -> np.ndarray:
+        """Denoise the full hops available; buffer the remainder."""
+        pcm = np.concatenate([self._buf, pcm])
+        n = pcm.size - pcm.size % self.hop
+        self._buf = pcm[n:]
+        return self._run(pcm[:n])
+
+    def flush(self) -> np.ndarray:
+        """Zero-pad to drain the buffered remainder and the model latency."""
+        tail = np.concatenate(
+            [self._buf, np.zeros(_N_FFT, dtype=np.float32)]
         )
-        self._denoiser = sherpa_onnx.OfflineSpeechDenoiser(config)
-        self.sample_rate: int = self._denoiser.sample_rate
+        self._buf = np.empty(0, dtype=np.float32)
+        return self._run(tail[: tail.size - tail.size % self.hop])
 
-    def denoise(self, pcm: "np.ndarray", sample_rate: int) -> "np.ndarray":
-        """Denoise float32 mono PCM; returns audio at the input rate."""
-        import numpy as np
 
-        denoised = self._denoiser.run(pcm, sample_rate=sample_rate)
-        out = np.asarray(denoised.samples, dtype=np.float32)
-        if denoised.sample_rate != sample_rate:
-            # GTCRN runs at 16 kHz; ASR models here are 16 kHz too, so this
-            # is defensive only (linear resample, good enough for ASR input).
-            duration = out.size / float(denoised.sample_rate)
-            n = int(round(duration * sample_rate))
-            out = np.interp(
-                np.linspace(0.0, out.size - 1, n),
-                np.arange(out.size),
-                out,
-            ).astype(np.float32)
-        return out
+class Enhancer:
+    """FastEnhancer session shared across connections (16 kHz only)."""
+
+    def __init__(self, models_dir: str | Path, size: str = DEFAULT_SIZE) -> None:
+        import onnxruntime
+
+        model = ensure_enhance_model(models_dir, size)
+        options = onnxruntime.SessionOptions()
+        options.intra_op_num_threads = 1
+        options.inter_op_num_threads = 1
+        self._session = onnxruntime.InferenceSession(
+            str(model), sess_options=options, providers=["CPUExecutionProvider"]
+        )
+        self.sample_rate: int = SAMPLE_RATE
+
+    def create_stream(self) -> EnhanceStream:
+        return EnhanceStream(self._session)
+
+    def denoise(self, pcm: np.ndarray, sample_rate: int) -> np.ndarray:
+        """Denoise one buffered utterance (the batch decode path)."""
+        if sample_rate != SAMPLE_RATE:
+            raise ValueError(f"FastEnhancer requires 16 kHz, got {sample_rate}")
+        stream = self.create_stream()
+        out = np.concatenate([stream.process(pcm), stream.flush()])
+        latency = _N_FFT - stream.hop
+        return out[latency : latency + pcm.size]

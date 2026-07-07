@@ -21,15 +21,13 @@ from wyoming.info import Describe, Info
 from wyoming.server import AsyncEventHandler
 
 from .audio import pcm16_to_float32
-from .diarize import render_tagged
-from .streaming import decode_mode, text_delta
+from .streaming import text_delta
 
 if TYPE_CHECKING:
     from argparse import Namespace
 
-    from .diarize import Diarizer
     from .engine import TranscribeEngine, TranscribeStream
-    from .enhance import Enhancer
+    from .enhance import Enhancer, EnhanceStream
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -46,7 +44,6 @@ class TranscribeHandler(AsyncEventHandler):
         cli_args: Namespace,
         engine: TranscribeEngine,
         enhancer: Enhancer | None = None,
-        diarizer: Diarizer | None = None,
         *args,
         **kwargs,
     ) -> None:
@@ -55,15 +52,11 @@ class TranscribeHandler(AsyncEventHandler):
         self._args = cli_args
         self._engine = engine
         self._enhancer = enhancer
-        self._diarizer = diarizer
-        self._mode = decode_mode(
-            engine.supports_streaming,
-            enhancement=enhancer is not None,
-            diarization=diarizer is not None,
-        )
+        self._mode = "stream" if engine.supports_streaming else "batch"
         self._language: str | None = cli_args.language
         self._chunks: list[np.ndarray] | None = None
         self._stream: TranscribeStream | None = None
+        self._enh_stream: EnhanceStream | None = None
         self._last_partial = ""
         self._n_samples = 0
         self._t0 = 0.0
@@ -72,6 +65,7 @@ class TranscribeHandler(AsyncEventHandler):
         if self._stream is not None:
             self._stream.close()
             self._stream = None
+        self._enh_stream = None
 
     async def handle_event(self, event: Event) -> bool:
         try:
@@ -94,6 +88,8 @@ class TranscribeHandler(AsyncEventHandler):
                     self._close_stream()
                     async with _ASR_LOCK:
                         self._stream = self._engine.create_stream(self._language)
+                    if self._enhancer is not None:
+                        self._enh_stream = self._enhancer.create_stream()
                     self._last_partial = ""
                     await self.write_event(
                         TranscriptStart(language=self._language).event()
@@ -108,6 +104,12 @@ class TranscribeHandler(AsyncEventHandler):
                 self._n_samples += samples.size
                 if self._stream is not None:
                     loop = asyncio.get_running_loop()
+                    if self._enh_stream is not None:
+                        samples = await loop.run_in_executor(
+                            None, self._enh_stream.process, samples
+                        )
+                        if not samples.size:
+                            return True
                     async with _ASR_LOCK:
                         partial = await loop.run_in_executor(
                             None, self._stream.feed, samples
@@ -145,6 +147,15 @@ class TranscribeHandler(AsyncEventHandler):
         loop = asyncio.get_running_loop()
         if self._stream is not None:
             try:
+                if self._enh_stream is not None:
+                    tail = await loop.run_in_executor(
+                        None, self._enh_stream.flush
+                    )
+                    self._enh_stream = None
+                    async with _ASR_LOCK:
+                        await loop.run_in_executor(
+                            None, self._stream.feed, tail
+                        )
                 async with _ASR_LOCK:
                     text = await loop.run_in_executor(None, self._stream.finalize)
             finally:
@@ -158,18 +169,9 @@ class TranscribeHandler(AsyncEventHandler):
                     pcm = await loop.run_in_executor(
                         None, self._enhancer.denoise, pcm, self._engine.sample_rate
                     )
-                if self._diarizer is not None:
-                    _, segments = await loop.run_in_executor(
-                        None, self._engine.transcribe_result, pcm, self._language
-                    )
-                    diar = await loop.run_in_executor(
-                        None, self._diarizer.diarize, pcm
-                    )
-                    text = render_tagged(segments, diar)
-                else:
-                    text = await loop.run_in_executor(
-                        None, self._engine.transcribe, pcm, self._language
-                    )
+                text = await loop.run_in_executor(
+                    None, self._engine.transcribe, pcm, self._language
+                )
         else:
             _LOGGER.debug("AudioStop without audio")
             await self.write_event(Transcript(text="").event())

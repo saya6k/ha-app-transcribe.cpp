@@ -23,19 +23,14 @@ configuration:
   speech_enhancement:
     name: Speech enhancement
     description: >-
-      Denoise each utterance with GTCRN before transcription. Helps in noisy
-      rooms; adds a little latency and disables live partial transcripts.
-  diarization:
-    name: Speaker diarization
+      Denoise the audio with FastEnhancer before transcription. Helps in
+      noisy rooms. Runs frame by frame, so live partial transcripts keep
+      working.
+  fastenhancer_size:
+    name: FastEnhancer model size
     description: >-
-      Tag the transcript with [Speaker N] labels for multi-speaker audio.
-      For Assist voice commands, chaining the Voiceprint add-on in front
-      gives named speakers instead. Disables live partial transcripts.
-  max_speakers:
-    name: Max speakers
-    description: >-
-      Optional diarization hint — the number of distinct speakers to expect.
-      Leave unset for automatic clustering.
+      Size of the speech enhancement model. Larger sizes denoise better but
+      use more CPU. Leave unset for base.
   hf_token:
     name: HuggingFace token
     description: >-
