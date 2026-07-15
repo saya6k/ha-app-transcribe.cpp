@@ -18,6 +18,7 @@ from .enhance import DEFAULT_SIZE as FASTENHANCER_DEFAULT_SIZE
 from .enhance import SIZES as FASTENHANCER_SIZES
 from .engine import TranscribeEngine
 from .handler import TranscribeHandler
+from .model_options import parse_config as parse_model_options
 from .models import DEFAULT_MODEL, REGISTRY, ensure_gguf
 
 _LOGGER = logging.getLogger(__name__)
@@ -96,6 +97,12 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--fastenhancer-size", default=None, choices=sorted(FASTENHANCER_SIZES),
         help="FastEnhancer model size (default: base)",
     )
+    parser.add_argument(
+        "--model-options-json", default="[]",
+        help="JSON array of {name, value} pairs — per-model runtime knobs "
+             "(e.g. att_context_right, initial_prompt); ignored for models "
+             "that don't support them",
+    )
     parser.add_argument("--hf-token", default="")
     parser.add_argument(
         "--log-level", default="info", choices=sorted(_LOG_LEVEL_MAP),
@@ -145,7 +152,9 @@ async def main() -> None:
     gguf, model_name, model_repo = _resolve_model(args, token)
     _LOGGER.info("Model file ready: %s", gguf)
 
-    engine = TranscribeEngine(str(gguf))
+    engine = TranscribeEngine(
+        str(gguf), model_options=parse_model_options(args.model_options_json)
+    )
     try:
         _LOGGER.info("Warming up ...")
         engine.warmup()
