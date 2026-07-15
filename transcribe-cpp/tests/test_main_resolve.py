@@ -8,6 +8,7 @@ from wyoming_transcribe_cpp import __main__ as main_mod
 from wyoming_transcribe_cpp import convert
 from wyoming_transcribe_cpp.__main__ import _parse_args, _resolve_model
 from wyoming_transcribe_cpp.convert import ConversionFailed
+from wyoming_transcribe_cpp.model_options import parse_config as parse_model_options
 from wyoming_transcribe_cpp.models import DEFAULT_MODEL, REGISTRY
 
 
@@ -55,3 +56,15 @@ class TestResolveModel:
         monkeypatch.setattr(convert, "request_conversion", boom)
         with pytest.raises(OSError):
             _resolve_model(args, None)
+
+
+class TestModelOptionsFlag:
+    def test_default_is_empty_json_array(self):
+        args = _parse_args([])
+        assert args.model_options_json == "[]"
+        assert parse_model_options(args.model_options_json) == {}
+
+    def test_round_trips_through_parse_config(self):
+        raw = '[{"name": "att_context_right", "value": "6"}]'
+        args = _parse_args(["--model-options-json", raw])
+        assert parse_model_options(args.model_options_json) == {"att_context_right": "6"}
