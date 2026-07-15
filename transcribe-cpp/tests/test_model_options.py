@@ -120,11 +120,14 @@ def test_warn_unrecognized_keys_silent_for_known_field(caplog):
 
 # --- build_family_extension ---------------------------------------------------
 
-def test_build_family_extension_stream_slot_happy_path():
+def test_build_family_extension_stream_slot_happy_path(caplog):
     model = _FakeModel(accepted_classes=(_ParakeetStreamOptions,))
     ext = mo.build_family_extension(_FakeTC, model, "stream", {"att_context_right": "6"})
     assert isinstance(ext, _ParakeetStreamOptions)
     assert ext.att_context_right == 6  # coerced to int
+    # A successfully applied option must be visible at INFO -- the
+    # user-facing signal that model_options actually took effect.
+    assert "applying ParakeetStreamOptions" in caplog.text
 
 
 def test_build_family_extension_run_slot_happy_path():
@@ -186,7 +189,8 @@ def test_build_family_extension_name_collision_resolved_by_accepts(caplog):
     )
     assert isinstance(ext, _MoonshineStreamingOptions)
     assert ext.min_decode_interval_ms == 80
-    assert caplog.text == ""
+    assert "not accepted" not in caplog.text
+    assert "does not accept" not in caplog.text
 
 
 def test_build_family_extension_bad_value_warns_even_if_another_key_succeeds(caplog):
@@ -234,8 +238,9 @@ def test_resolve_spec_k_drafts_default_is_minus_one():
     assert mo.resolve_spec_k_drafts({}) == -1
 
 
-def test_resolve_spec_k_drafts_valid_value():
+def test_resolve_spec_k_drafts_valid_value(caplog):
     assert mo.resolve_spec_k_drafts({"spec_k_drafts": "4"}) == 4
+    assert "applying spec_k_drafts=4" in caplog.text
 
 
 def test_resolve_spec_k_drafts_zero_means_off():
