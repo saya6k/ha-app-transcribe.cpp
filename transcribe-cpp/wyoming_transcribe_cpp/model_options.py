@@ -182,6 +182,7 @@ def build_family_extension(tc: Any, model: Any, slot: str, options: dict[str, st
     for cls_name, cls, kwargs in candidates:
         instance = cls(**kwargs)
         if model.accepts(instance):
+            _LOGGER.info("model_options: applying %s (%s)", cls_name, kwargs)
             return instance
 
     for cls_name, cls, kwargs in candidates:
@@ -214,4 +215,5 @@ def resolve_spec_k_drafts(options: dict[str, str]) -> int:
             "or a positive draft length; ignoring", raw_value,
         )
         return -1
+    _LOGGER.info("model_options: applying spec_k_drafts=%d", value)
     return value
