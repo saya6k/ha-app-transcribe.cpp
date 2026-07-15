@@ -87,8 +87,16 @@ def test_parse_config_malformed_json_is_ignored(caplog):
     assert "not valid JSON" in caplog.text
 
 
-def test_parse_config_non_array_is_ignored(caplog):
-    assert mo.parse_config('{"name": "x", "value": "y"}') == {}
+def test_parse_config_single_entry_bare_object():
+    # Supervisor drops the [...] wrapper when model_options has exactly one
+    # row, so bashio::config emits a bare object instead of a one-item array.
+    assert mo.parse_config('{"name": "att_context_right", "value": "13"}') == {
+        "att_context_right": "13"
+    }
+
+
+def test_parse_config_non_array_non_object_is_ignored(caplog):
+    assert mo.parse_config('"just a string"') == {}
     assert "must be a JSON array" in caplog.text
 
 
