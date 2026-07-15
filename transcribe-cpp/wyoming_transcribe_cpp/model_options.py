@@ -97,16 +97,21 @@ FIELD_COERCE: dict[str, Callable[[str], Any]] = {
 def parse_config(raw: str) -> dict[str, str]:
     """Parse the addon's ``--model-options-json`` flag into a flat dict.
 
-    ``raw`` is the JSON array of ``{"name": ..., "value": ...}`` objects that
-    ``bashio::config 'model_options'`` emits directly (HA stores list-of-object
-    options as JSON already — see the ``run`` script). Never raises: malformed
-    input is warning-logged and treated as no options.
+    ``raw`` is normally the JSON array of ``{"name": ..., "value": ...}``
+    objects that ``bashio::config 'model_options'`` emits (HA stores
+    list-of-object options as JSON already — see the ``run`` script). A
+    single-row config comes through as a bare JSON object instead of a
+    one-item array — Supervisor drops the ``[...]`` wrapper when the list
+    has exactly one entry — so that shape is accepted too. Never raises:
+    malformed input is warning-logged and treated as no options.
     """
     try:
         items = json.loads(raw)
     except json.JSONDecodeError:
         _LOGGER.warning("model_options is not valid JSON (%r); ignoring", raw)
         return {}
+    if isinstance(items, dict):
+        items = [items]
     if not isinstance(items, list):
         _LOGGER.warning("model_options must be a JSON array; got %s; ignoring",
                         type(items).__name__)
