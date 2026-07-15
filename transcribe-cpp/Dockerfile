@@ -4,10 +4,10 @@
 # the compiled libs match the target CPU.
 ARG BUILD_FROM=ghcr.io/home-assistant/base-debian:trixie
 
-# Pin upstream transcribe.cpp — no release tags yet, so we pin a commit SHA.
-# GGML_NATIVE is OFF for a portable build (ggml still picks AVX2/NEON kernels
-# at runtime). ggml is vendored in-tree (no submodules).
-ARG TRANSCRIBE_REF=d89ecb75062e8457681c563994675dc60e31db80
+# Pin upstream transcribe.cpp — pinned by commit SHA (currently v0.1.3) for
+# reproducibility. GGML_NATIVE is OFF for a portable build (ggml still picks
+# AVX2/NEON kernels at runtime). ggml is vendored in-tree (no submodules).
+ARG TRANSCRIBE_REF=a94e021ef658dc7c788837341a13f6acea3baf3c
 
 # ---- builder: compile libtranscribe.so + transcribe-quantize, install deps ----
 FROM ${BUILD_FROM} AS builder
